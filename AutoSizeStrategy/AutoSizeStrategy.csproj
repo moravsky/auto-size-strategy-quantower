@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <Platforms>AnyCPU</Platforms>
+    <AlgoType>Strategy</AlgoType>
+    <AssemblyName>AutoSizeStrategy</AssemblyName>
+    <RootNamespace>AutoSizeStrategy</RootNamespace>
+    <StartAction>Program</StartAction>
+    <StartProgram>C:\Quantower\TradingPlatform\v1.145.8\Console.StarterNew.exe</StartProgram>
+    <StartArguments>--address 127.0.0.1 --port 52879</StartArguments>
+    <!--
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>-->
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <OutputPath>C:\Quantower\TradingPlatform\v1.145.8\..\..\Settings\Scripts\Strategies\AutoSizeStrategy</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <OutputPath>C:\Quantower\TradingPlatform\v1.145.8\..\..\Settings\Scripts\Strategies\AutoSizeStrategy</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="TradingPlatform.BusinessLayer">
+      <HintPath>C:\Quantower\TradingPlatform\v1.145.8\bin\TradingPlatform.BusinessLayer.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
