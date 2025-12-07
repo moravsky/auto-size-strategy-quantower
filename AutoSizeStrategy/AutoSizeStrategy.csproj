@@ -15,16 +15,15 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>-->
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <OutputPath>C:\Quantower\TradingPlatform\v1.145.9\..\..\Settings\Scripts\Strategies\AutoSizeStrategy</OutputPath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <OutputPath>C:\Quantower\TradingPlatform\v1.145.9\..\..\Settings\Scripts\Strategies\AutoSizeStrategy</OutputPath>
-  </PropertyGroup>
   <ItemGroup>
     <Reference Include="TradingPlatform.BusinessLayer">
       <HintPath>C:\Quantower\TradingPlatform\v1.145.9\bin\TradingPlatform.BusinessLayer.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="xcopy &quot;$(OutputPath)$(AssemblyName).dll&quot; &quot;C:\Quantower\Settings\Scripts\Strategies\AutoSizeStrategy&quot; /Y /I" />
+    <Exec Command="xcopy &quot;$(OutputPath)$(AssemblyName).pdb&quot; &quot;C:\Quantower\Settings\Scripts\Strategies\AutoSizeStrategy&quot; /Y /I" />
+    <Exec Command="xcopy &quot;$(OutputPath)$(AssemblyName).deps.json&quot; &quot;C:\Quantower\Settings\Scripts\Strategies\AutoSizeStrategy&quot; /Y /I" />
+  </Target>
 </Project>
