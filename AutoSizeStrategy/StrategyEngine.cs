@@ -47,8 +47,6 @@ namespace AutoSizeStrategy
 
         public void ProcessFailSafe(IOrder order)
         {
-            order.Cancel();
-
             if (order.Status != OrderStatus.Opened || order.IsReduceOnly)
                 return;
 
