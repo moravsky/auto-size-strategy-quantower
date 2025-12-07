@@ -29,7 +29,7 @@ namespace AutoSizeStrategy.Tests
         {
             var request = new PlaceOrderRequestParameters { Comment = null, Quantity = 10 };
 
-            StrategyEngine.ProcessRequest(request);
+            _engine.ProcessRequest(request);
 
             Assert.Contains("[RiskQty:2]", request.Comment);
             Assert.Equal(2, request.Quantity); // enforced size
@@ -40,7 +40,7 @@ namespace AutoSizeStrategy.Tests
         {
             var request = new PlaceOrderRequestParameters { Comment = "Start here", Quantity = 10 };
 
-            StrategyEngine.ProcessRequest(request);
+            _engine.ProcessRequest(request);
 
             Assert.Equal("Start here [RiskQty:2]", request.Comment);
             Assert.Equal(2, request.Quantity);
@@ -51,7 +51,7 @@ namespace AutoSizeStrategy.Tests
         {
             var nonPlaceRequest = new SomeOtherRequestParameters(); // any non‑PlaceOrder type
 
-            StrategyEngine.ProcessRequest(nonPlaceRequest);
+            _engine.ProcessRequest(nonPlaceRequest);
 
             // No changes expected – no exception must be thrown
         }
@@ -61,7 +61,7 @@ namespace AutoSizeStrategy.Tests
         {
             var request = new PlaceOrderRequestParameters { Comment = "[RiskQty:2]", Quantity = 5 };
 
-            StrategyEngine.ProcessRequest(request);
+            _engine.ProcessRequest(request);
 
             // Tag is untouched – quantity should still be original if the method exits early
             Assert.Equal("[RiskQty:2]", request.Comment);
@@ -77,7 +77,7 @@ namespace AutoSizeStrategy.Tests
         public void TryGetSizeFromTag_ReturnsTrue_WhenTagPresent()
         {
             var comment = "Random text [RiskQty:5] more";
-            bool result = StrategyEngine.TryGetSizeFromTag(comment, out int size);
+            bool result = _engine.TryGetSizeFromTag(comment, string.Empty, out int size);
 
             Assert.True(result);
             Assert.Equal(5, size);
@@ -87,7 +87,7 @@ namespace AutoSizeStrategy.Tests
         public void TryGetSizeFromTag_ReturnsFalse_WhenTagMissing()
         {
             var comment = "No tag here";
-            bool result = StrategyEngine.TryGetSizeFromTag(comment, out int size);
+            bool result = _engine.TryGetSizeFromTag(comment, string.Empty, out int size);
 
             Assert.False(result);
             Assert.Equal(0, size);
@@ -109,7 +109,7 @@ namespace AutoSizeStrategy.Tests
             _engine.ProcessFailSafe(order.Object);
 
             _loggerMock.Verify(
-                l => l.LogError(It.Is<string>(s => s.Contains("[WARNING]"))),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("does not have a size tag"))),
                 Times.Once
             );
             order.Verify(o => o.Cancel(), Times.Never);
@@ -127,7 +127,7 @@ namespace AutoSizeStrategy.Tests
             _engine.ProcessFailSafe(order.Object);
 
             _loggerMock.Verify(
-                l => l.LogError(It.Is<string>(s => s.Contains("[FAIL-SAFE]"))),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Killing Order"))),
                 Times.Once
             );
             order.Verify(o => o.Cancel(), Times.Once);
@@ -144,6 +144,75 @@ namespace AutoSizeStrategy.Tests
 
             _loggerMock.VerifyNoOtherCalls();
             order.VerifyGet(o => o.Status, Times.AtLeastOnce);
+        }
+
+        [Fact]
+        public void ProcessRequest_LogsEnforceInfo_WhenQuantityAdjusted()
+        {
+            // Quantity is 5 -> should be changed to 2
+            var request = new PlaceOrderRequestParameters { Comment = null, Quantity = 5 };
+
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(2, request.Quantity);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(msg => msg.Contains("[Risk Enforced]"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public void ProcessRequest_DoesNotLog_WhenTagAlreadyPresent()
+        {
+            var request = new PlaceOrderRequestParameters { Comment = "[RiskQty:2]", Quantity = 5 };
+
+            _engine.ProcessRequest(request);
+
+            // No LogInfo should be executed because the method exits early
+            _loggerMock.Verify(l => l.LogInfo(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public void TryGetSizeFromTag_ReturnsFalse_WhenNullComment()
+        {
+            bool result = _engine.TryGetSizeFromTag(null, "XYZ", out int size);
+
+            Assert.False(result);
+            Assert.Equal(0, size);
+            _loggerMock.VerifyNoOtherCalls(); // no error logged
+        }
+
+        [Fact]
+        public void TryGetSizeFromTag_LogsError_WhenInvalidTag()
+        {
+            var comment = "[RiskQty:ABC]";
+
+            bool result = _engine.TryGetSizeFromTag(comment, "XYZ", out int size);
+
+            Assert.False(result);
+            Assert.Equal(0, size);
+            _loggerMock.Verify(
+                l => l.LogError(It.Is<string>(s => s.Contains("invalid validation tag"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public void ProcessFailSafe_LogsError_WhenCancelThrows()
+        {
+            var order = new Mock<IOrder>();
+            order.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
+            order.SetupGet(o => o.TotalQuantity).Returns(5); // mismatch
+            order.SetupGet(o => o.Comment).Returns("[RiskQty:2]");
+            order.SetupGet(o => o.Id).Returns("XYZ");
+            order.Setup(o => o.Cancel()).Throws<InvalidOperationException>(); // simulate failure
+
+            _engine.ProcessFailSafe(order.Object);
+
+            _loggerMock.Verify(
+                l => l.LogError(It.Is<string>(s => s.Contains("cancelation failed"))),
+                Times.Once
+            );
         }
 
         #endregion

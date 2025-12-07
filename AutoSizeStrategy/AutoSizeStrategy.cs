@@ -4,6 +4,12 @@ using TradingPlatform.BusinessLayer.Utils;
 
 namespace AutoSizeStrategy
 {
+    public interface IStrategyLogger
+    {
+        void LogError(string message);
+        void LogInfo(string message);
+    }
+
     public class AutoSizeStrategy : Strategy, IStrategyLogger
     {
         // A unique ID to track this specific instance of the strategy
@@ -35,7 +41,18 @@ namespace AutoSizeStrategy
 
         private void CoreNewRequest(object sender, RequestEventArgs e)
         {
-            StrategyEngine.ProcessRequest(e.RequestParameters);
+            try
+            {
+                // Call the engine (static) – any error goes to the engine’s own logs
+                strategyEngine.ProcessRequest(e.RequestParameters);
+            }
+            catch (Exception ex)
+            {
+                // The strategy receives the failure and writes it to the system log
+                LogError($"CoreNewRequest failed: {ex}");
+                // Re-throw the exception so that the host can handle it (e.g., show a popup)
+                throw;
+            }
         }
 
         // Called when you click "Stop"
@@ -59,13 +76,27 @@ namespace AutoSizeStrategy
 
         private void OnOrderAdded(Order order)
         {
-            var orderWrapper = new OrderWrapper(order);
-            strategyEngine.ProcessFailSafe(orderWrapper);
+            try
+            {
+                var orderWrapper = new OrderWrapper(order);
+                strategyEngine.ProcessFailSafe(orderWrapper);
+            }
+            catch (Exception ex)
+            {
+                LogError($"OnOrderAdded failed for order {order.Id}: {ex}");
+                // Re-throw the exception so that the host can handle it (e.g., show a popup)
+                throw;
+            }
         }
 
         public void LogError(string message)
         {
             Log(message, StrategyLoggingLevel.Error);
+        }
+
+        public void LogInfo(string message)
+        {
+            Log(message, StrategyLoggingLevel.Info);
         }
     }
 }

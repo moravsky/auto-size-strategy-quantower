@@ -8,19 +8,14 @@ using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
-    public interface IStrategyLogger
-    {
-        void LogError(string message);
-    }
-
     public partial class StrategyEngine(IStrategyLogger logger)
     {
         private const int TARGET_QTY = 2;
 
-        [GeneratedRegex(@"\[RiskQty:(\d+)\]", RegexOptions.Compiled)]
+        [GeneratedRegex(@"\[RiskQty:((?s).)+\]", RegexOptions.Compiled)]
         private static partial Regex TagRegex();
 
-        public static void ProcessRequest(RequestParameters requestParameters)
+        public void ProcessRequest(RequestParameters requestParameters)
         {
             if (requestParameters is not PlaceOrderRequestParameters placeOrderRequestParameters)
                 return;
@@ -42,6 +37,12 @@ namespace AutoSizeStrategy
                 : $"{placeOrderRequestParameters.Comment} {tag}";
 
             // Enforce Size
+            if (placeOrderRequestParameters.Quantity != TARGET_QTY)
+            {
+                logger.LogInfo(
+                    $"[Risk Enforced] Adjusting order {placeOrderRequestParameters.RequestId}' quantity from {placeOrderRequestParameters.Quantity} to {TARGET_QTY}"
+                );
+            }
             placeOrderRequestParameters.Quantity = TARGET_QTY;
         }
 
@@ -52,34 +53,50 @@ namespace AutoSizeStrategy
 
             double correctSize;
 
-            if (TryGetSizeFromTag(order.Comment, out int taggedSize))
+            if (TryGetSizeFromTag(order.Comment, order.Id, out int taggedSize))
             {
                 correctSize = taggedSize;
             }
             else
             {
-                correctSize = TARGET_QTY;
-                logger.LogError(
-                    $"[WARNING] Order {order.Id} has no validation tag. Checked logic manually."
+                logger.LogInfo(
+                    $"[FAIL-SAFE] Order {order.Id} does not have a size tag, using default of {TARGET_QTY}"
                 );
+                correctSize = TARGET_QTY;
             }
 
             // Using 0.001 tolerance for double comparison
             if (Math.Abs(order.TotalQuantity - correctSize) > 0.001)
             {
-                logger.LogError(
+                logger.LogInfo(
                     $"[FAIL-SAFE] Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {correctSize}."
                 );
-                order.Cancel();
+                try
+                {
+                    order.Cancel();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(
+                        $"[FAIL-SAFE] Order {order.Id} cancelation failed: {ex.Message}"
+                    );
+                }
             }
         }
 
-        public static bool TryGetSizeFromTag(string comment, out int taggedSize)
+        public bool TryGetSizeFromTag(string comment, string orderId, out int taggedSize)
         {
             var match = TagRegex().Match(comment ?? "");
-            if (match.Success)
+            if (match.Success && match.Groups.Count > 1 && match.Groups[1].Success)
             {
-                return int.TryParse(match.Groups[1].Value, out taggedSize);
+                if (int.TryParse(match.Groups[1].Value, out taggedSize))
+                {
+                    return true;
+                }
+                else
+                {
+                    logger.LogError($"[FAIL-SAFE] Order {orderId} has invalid validation tag.");
+                }
             }
             taggedSize = 0;
             return false;
