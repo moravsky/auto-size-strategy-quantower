@@ -10,7 +10,6 @@ namespace AutoSizeStrategy
         double TotalQuantity { get; }
         OrderStatus Status { get; }
         void Cancel();
-        bool IsReduceOnly { get; }
     }
 
     // 2. Your Wrapper (Simple, no compilation errors, no strictness fighting)
@@ -30,20 +29,5 @@ namespace AutoSizeStrategy
         public OrderStatus Status => order.Status;
 
         public void Cancel() => order.Cancel();
-
-        public bool IsReduceOnly
-        {
-            get
-            {
-                // Safety check: specific adapters might leave this null
-                if (order.AdditionalInfo == null)
-                    return false;
-
-                // Scan the collection for the flag we found in the screenshot
-                return order.AdditionalInfo.Any(item =>
-                    item.Id == "Reduce-Only" && item.Value?.ToString() == "True"
-                );
-            }
-        }
     }
 }
