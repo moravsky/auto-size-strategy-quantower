@@ -14,7 +14,8 @@ namespace AutoSizeStrategy
         public AutoSizeStrategy()
         {
             this.Name = "AutoSizeStrategy42";
-            this.Description = "Size orders for ALL symbols and accounts according to risk parameters.";
+            this.Description =
+                "Size orders for ALL symbols and accounts according to risk parameters.";
             this.strategyEngine = new StrategyEngine(this);
         }
 
@@ -34,7 +35,7 @@ namespace AutoSizeStrategy
 
         private void CoreNewRequest(object sender, RequestEventArgs e)
         {
-            strategyEngine.ProcessRequest(e.RequestParameters);
+            StrategyEngine.ProcessRequest(e.RequestParameters);
         }
 
         // Called when you click "Stop"
@@ -58,7 +59,7 @@ namespace AutoSizeStrategy
 
         private void OnOrderAdded(Order order)
         {
-            var orderWrapper = new OrderWrapper(order);  
+            var orderWrapper = new OrderWrapper(order);
             strategyEngine.ProcessFailSafe(orderWrapper);
         }
 

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
 
@@ -11,35 +12,45 @@ namespace AutoSizeStrategy
     {
         void LogError(string message);
     }
-    internal class StrategyEngine
+
+    public partial class StrategyEngine(IStrategyLogger logger)
     {
         private const int TARGET_QTY = 2;
-        private readonly IStrategyLogger _logger;
 
-        public StrategyEngine(IStrategyLogger logger) 
+        [GeneratedRegex(@"\[RiskQty:(\d+)\]", RegexOptions.Compiled)]
+        private static partial Regex TagRegex();
+
+        public static void ProcessRequest(RequestParameters requestParameters)
         {
-            _logger = logger;
-        }
-        public void ProcessRequest(RequestParameters requestParameters)
-        {
-            if (requestParameters is not PlaceOrderRequestParameters placeOrderRequestParameters) return;
+            if (requestParameters is not PlaceOrderRequestParameters placeOrderRequestParameters)
+                return;
 
             string tag = $"[RiskQty:{TARGET_QTY}]";
 
             // Idempotency check
-            if (placeOrderRequestParameters.Comment != null && placeOrderRequestParameters.Comment.Contains("[RiskQty:")) return;
+            if (
+                placeOrderRequestParameters.Comment != null
+                && placeOrderRequestParameters.Comment.Contains("[RiskQty:")
+            )
+                return;
 
             // Append safely
-            placeOrderRequestParameters.Comment = string.IsNullOrEmpty(placeOrderRequestParameters.Comment) ? tag : $"{placeOrderRequestParameters.Comment} {tag}";
+            placeOrderRequestParameters.Comment = string.IsNullOrEmpty(
+                placeOrderRequestParameters.Comment
+            )
+                ? tag
+                : $"{placeOrderRequestParameters.Comment} {tag}";
 
             // Enforce Size
             placeOrderRequestParameters.Quantity = TARGET_QTY;
         }
+
         public void ProcessFailSafe(IOrder order)
         {
             order.Cancel();
-            
-            if (order.Status != OrderStatus.Opened || order.IsReduceOnly) return;
+
+            if (order.Status != OrderStatus.Opened || order.IsReduceOnly)
+                return;
 
             double correctSize;
 
@@ -50,19 +61,24 @@ namespace AutoSizeStrategy
             else
             {
                 correctSize = TARGET_QTY;
-                _logger.LogError($"[WARNING] Order {order.Id} has no validation tag. Checked logic manually.");
+                logger.LogError(
+                    $"[WARNING] Order {order.Id} has no validation tag. Checked logic manually."
+                );
             }
 
             // Using 0.001 tolerance for double comparison
             if (Math.Abs(order.TotalQuantity - correctSize) > 0.001)
             {
-                _logger.LogError($"[FAIL-SAFE] Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {correctSize}.");
+                logger.LogError(
+                    $"[FAIL-SAFE] Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {correctSize}."
+                );
                 order.Cancel();
             }
         }
-        public bool TryGetSizeFromTag(string comment, out int taggedSize)
+
+        public static bool TryGetSizeFromTag(string comment, out int taggedSize)
         {
-            var match = System.Text.RegularExpressions.Regex.Match(comment ?? "", @"\[RiskQty:(\d+)\]");
+            var match = TagRegex().Match(comment ?? "");
             if (match.Success)
             {
                 return int.TryParse(match.Groups[1].Value, out taggedSize);
