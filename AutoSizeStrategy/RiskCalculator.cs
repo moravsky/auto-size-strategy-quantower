@@ -1,20 +1,21 @@
 using System;
+using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
+    /// <summary>
+    /// Indicates the type of drawdown to use when calculating available risk capital.
+    /// </summary>
+    public enum DrawdownMode
+    {
+        Intraday,
+        EndOfDay,
+        Static,
+    }
+
     public static class RiskCalculator
     {
-        /// <summary>
-        /// Calculates the position size based on risk capital, stop distance in ticks, and tick value.
-        /// </summary>
-        /// <param name="riskCapital">The amount of capital available for risk.</param>
-        /// <param name="stopDistanceTicks">The distance of the stop in ticks.</param>
-        /// <param name="tickValue">The monetary value per tick.</param>
-        /// <returns>The maximum position size as an integer.</returns>
-        /// <exception cref="ArgumentException">
-        /// Thrown if any input is NaN, Infinity, or less than or equal to zero, or if
-        /// the calculated position size is zero (indicating the risk capital is too small).
-        /// </exception>
+        /// Calculates the maximum position size based on the risk capital, stop distance, and tick value.
         public static int CalculatePositionSize(
             double riskCapital,
             double stopDistanceTicks,
@@ -44,6 +45,35 @@ namespace AutoSizeStrategy
             int positionSize = (int)Math.Floor(rawResult + MathUtil.Epsilon);
 
             return positionSize;
+        }
+
+        /// Determines the amount of capital that can be risked based on the account balance
+        /// and the selected drawdown mode, then applies the risk percentage.
+        public static double CalculateRiskCapital(
+            IAccount account,
+            double riskPercent,
+            DrawdownMode mode
+        )
+        {
+            ArgumentNullException.ThrowIfNull(account);
+
+            if (riskPercent <= 0 || riskPercent > 100)
+                throw new ArgumentException(
+                    "Risk percentage must be > 0 and <= 100.",
+                    nameof(riskPercent)
+                );
+
+            var availableDrawdown = mode switch
+            {
+                DrawdownMode.Static => account.Balance,
+                DrawdownMode.Intraday or DrawdownMode.EndOfDay => account.Balance - 145_500, // Hard‑coded buffer for now – replace with real logic later.
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(mode),
+                    "Unsupported drawdown mode."
+                ),
+            };
+            double riskCapital = availableDrawdown * (riskPercent / 100.0);
+            return riskCapital;
         }
     }
 }

@@ -12,11 +12,8 @@ namespace AutoSizeStrategy
         void Cancel();
     }
 
-    // 2. Your Wrapper (Simple, no compilation errors, no strictness fighting)
     public class OrderWrapper(Order order) : IOrder
     {
-        //private readonly Order _order = order;
-
         public string Id => order.Id;
         public string Comment
         {
@@ -29,5 +26,15 @@ namespace AutoSizeStrategy
         public OrderStatus Status => order.Status;
 
         public void Cancel() => order.Cancel();
+    }
+
+    public interface IAccount
+    {
+        double Balance { get; }
+    }
+
+    public class AccountWrapper(Account realAccount) : IAccount
+    {
+        public double Balance => realAccount.Balance;
     }
 }
