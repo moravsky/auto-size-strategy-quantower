@@ -14,12 +14,15 @@ namespace AutoSizeStrategy.Tests
     public class StrategyEngineTests
     {
         private readonly Mock<IStrategyLogger> _loggerMock;
+        private readonly Mock<IStrategyContext> _contextMock;
         private readonly StrategyEngine _engine;
 
         public StrategyEngineTests()
         {
             _loggerMock = new Mock<IStrategyLogger>();
-            _engine = new StrategyEngine(_loggerMock.Object);
+            _contextMock = new Mock<IStrategyContext>();
+            _contextMock.SetupGet(c => c.Logger).Returns(_loggerMock.Object);
+            _engine = new StrategyEngine(_contextMock.Object);
         }
 
         #region ProcessRequest ---------------------------------------------

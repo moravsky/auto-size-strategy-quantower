@@ -1,14 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
-    public partial class StrategyEngine(IStrategyLogger logger)
+    public partial class StrategyEngine(IStrategyContext context)
     {
         private const int TARGET_QTY = 2;
 
@@ -39,7 +35,7 @@ namespace AutoSizeStrategy
             // Enforce Size
             if (placeOrderRequestParameters.Quantity != TARGET_QTY)
             {
-                logger.LogInfo(
+                context.Logger.LogInfo(
                     $"[Risk Enforced] Adjusting order {placeOrderRequestParameters.RequestId}' quantity from {placeOrderRequestParameters.Quantity} to {TARGET_QTY}"
                 );
             }
@@ -59,16 +55,15 @@ namespace AutoSizeStrategy
             }
             else
             {
-                logger.LogInfo(
+                context.Logger.LogInfo(
                     $"[FAIL-SAFE] Order {order.Id} does not have a size tag, using default of {TARGET_QTY}"
                 );
                 correctSize = TARGET_QTY;
             }
 
-            // Using 0.001 tolerance for double comparison
             if (Math.Abs(order.TotalQuantity - correctSize) > 0.001)
             {
-                logger.LogInfo(
+                context.Logger.LogInfo(
                     $"[FAIL-SAFE] Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {correctSize}."
                 );
                 try
@@ -77,7 +72,7 @@ namespace AutoSizeStrategy
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(
+                    context.Logger.LogError(
                         $"[FAIL-SAFE] Order {order.Id} cancelation failed: {ex.Message}"
                     );
                 }
@@ -95,7 +90,9 @@ namespace AutoSizeStrategy
                 }
                 else
                 {
-                    logger.LogError($"[FAIL-SAFE] Order {orderId} has invalid validation tag.");
+                    context.Logger.LogError(
+                        $"[FAIL-SAFE] Order {orderId} has invalid validation tag."
+                    );
                 }
             }
             taggedSize = 0;
