@@ -17,6 +17,9 @@ namespace AutoSizeStrategy
 
         private StrategyEngine strategyEngine;
 
+        [InputParameter("Risk Percent", minimum: 1.0, maximum: 100.0, increment: 1.0)]
+        public double RiskPercent { get; set; } = 10.0;
+
         public AutoSizeStrategy()
         {
             this.Name = "AutoSizeStrategy42";
