@@ -1,22 +1,25 @@
 ﻿using System;
 using System.Text.RegularExpressions;
+using System.Threading;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
     public partial class StrategyEngine(IStrategyContext context)
     {
-        private const int TARGET_QTY = 2;
-
         [GeneratedRegex(@"\[RiskQty:((?s).)+\]", RegexOptions.Compiled)]
         private static partial Regex TagRegex();
 
-        public void ProcessRequest(RequestParameters requestParameters)
-        {
-            if (requestParameters is not PlaceOrderRequestParameters placeOrderRequestParameters)
-                return;
+        [GeneratedRegex(@"TPPRO\d+", RegexOptions.Compiled)]
+        private static partial Regex IntradayAccountPattern();
 
-            string tag = $"[RiskQty:{TARGET_QTY}]";
+        [GeneratedRegex(@"TPT\d+", RegexOptions.Compiled)]
+        private static partial Regex EndOfDayAccountPattern();
+
+        public void ProcessRequest(IRequestParameters requestParameters)
+        {
+            if (requestParameters is not IPlaceOrderRequestParameters placeOrderRequestParameters)
+                return;
 
             // Idempotency check
             if (
@@ -25,21 +28,105 @@ namespace AutoSizeStrategy
             )
                 return;
 
+            // Check for stop loss
+            if (
+                placeOrderRequestParameters.StopLossItems == null
+                || placeOrderRequestParameters.StopLossItems.Count == 0
+            )
+            {
+                if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
+                {
+                    context.Logger.LogInfo(
+                        $"Order request {placeOrderRequestParameters.RequestId} cancelled: stop loss required"
+                    );
+                    placeOrderRequestParameters.CancellationToken = new CancellationToken(
+                        canceled: true
+                    );
+                    return;
+                }
+                else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
+                {
+                    context.Logger.LogInfo(
+                        "Order request {placeOrderRequestParameters.RequestId} has no stop loss - passing through unchanged"
+                    );
+                    return;
+                }
+            }
+
+            // Infer drawdown mode
+            string accountId = placeOrderRequestParameters.Account.Id;
+            DrawdownMode drawdownMode = InferDrawdownMode(accountId);
+
+            // Wrap account
+            var wrappedAccount = new AccountWrapper(placeOrderRequestParameters.Account);
+
+            // Calculate risk capital
+            double riskCapital = RiskCalculator.CalculateRiskCapital(
+                wrappedAccount,
+                context.Settings.RiskPercent,
+                drawdownMode
+            );
+
+            // Get symbol data
+            var symbol = placeOrderRequestParameters.Symbol;
+            double entryPrice = placeOrderRequestParameters.Price;
+            double stopPrice = placeOrderRequestParameters.StopLossItems[0].Price;
+            double tickSize = symbol.TickSize;
+            double tickValue = symbol.GetTickCost(symbol.Last);
+
+            // Calculate position size using new overload
+            int calculatedSize = RiskCalculator.CalculatePositionSize(
+                riskCapital,
+                entryPrice,
+                stopPrice,
+                tickSize,
+                tickValue
+            );
+
+            if (calculatedSize == 0)
+            {
+                context.Logger.LogInfo("Risk too small for 1 contract");
+                placeOrderRequestParameters.CancellationToken = new CancellationToken(
+                    canceled: true
+                );
+                return;
+            }
+
+            // Set calculated size
+            if (placeOrderRequestParameters.Quantity != calculatedSize)
+            {
+                context.Logger.LogInfo(
+                    $"[Risk Enforced] request {placeOrderRequestParameters.RequestId} changed quantity from {placeOrderRequestParameters.Quantity} to {calculatedSize}"
+                );
+            }
+            placeOrderRequestParameters.Quantity = calculatedSize;
+
+            // Update tag
+            string tag = $"[RiskQty:{calculatedSize}]";
+
             // Append safely
             placeOrderRequestParameters.Comment = string.IsNullOrEmpty(
                 placeOrderRequestParameters.Comment
             )
                 ? tag
                 : $"{placeOrderRequestParameters.Comment} {tag}";
+        }
 
-            // Enforce Size
-            if (placeOrderRequestParameters.Quantity != TARGET_QTY)
+        private DrawdownMode InferDrawdownMode(string accountId)
+        {
+            if (IntradayAccountPattern().IsMatch(accountId))
             {
-                context.Logger.LogInfo(
-                    $"[Risk Enforced] Adjusting order {placeOrderRequestParameters.RequestId}' quantity from {placeOrderRequestParameters.Quantity} to {TARGET_QTY}"
-                );
+                return DrawdownMode.Intraday;
             }
-            placeOrderRequestParameters.Quantity = TARGET_QTY;
+            else if (EndOfDayAccountPattern().IsMatch(accountId))
+            {
+                return DrawdownMode.EndOfDay;
+            }
+            else
+            {
+                return DrawdownMode.Static;
+            }
+            // TODO: V2: Add UX override for drawdown mode
         }
 
         public void ProcessFailSafe(IOrder order)
@@ -56,9 +143,11 @@ namespace AutoSizeStrategy
             else
             {
                 context.Logger.LogInfo(
-                    $"[FAIL-SAFE] Order {order.Id} does not have a size tag, using default of {TARGET_QTY}"
+                    $"[FAIL-SAFE] Order {order.Id} does not have a size tag, using default of 2"
                 );
-                correctSize = TARGET_QTY;
+                // TODO: change ProcessFailSafe to verify order correctness a different way,
+                // e.g. by checking the order size against the risk capital
+                correctSize = 2;
             }
 
             if (Math.Abs(order.TotalQuantity - correctSize) > 0.001)

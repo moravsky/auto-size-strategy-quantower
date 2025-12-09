@@ -14,6 +14,14 @@ namespace AutoSizeStrategy.Test
     {
         #region CalculateRiskCapital
         [Fact]
+        public void CalculatePositionSize_Overload_ReturnsCorrectSize()
+        {
+            // $500 risk, 20 tick stop, $5/tick = 5 contracts
+            int size = RiskCalculator.CalculatePositionSize(500, 5005, 5000, 0.25, 5);
+            Assert.Equal(5, size);
+        }
+
+        [Fact]
         public void CalculatePositionSize_StandardCase_ReturnsCorrectSize()
         {
             // $500 risk, 20 tick stop, $5/tick = 5 contracts
