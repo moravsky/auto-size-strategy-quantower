@@ -40,7 +40,7 @@ namespace AutoSizeStrategy
         {
             try
             {
-                strategyEngine.ProcessRequest(e.RequestParameters);
+                strategyEngine.ProcessRequest(new RequestParametersWrapper(e.RequestParameters));
             }
             catch (Exception ex)
             {

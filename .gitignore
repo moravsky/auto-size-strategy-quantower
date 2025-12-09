@@ -4,6 +4,7 @@ bin/
 *.user
 *.suo
 *.cache
-prompt.md
+_zzz_*
+_ZZZ_*
 settings.json
 tasks.json

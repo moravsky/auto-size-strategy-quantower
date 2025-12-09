@@ -47,6 +47,21 @@ namespace AutoSizeStrategy
             return positionSize;
         }
 
+        public static int CalculatePositionSize(
+            double riskCapital,
+            double entryPrice,
+            double stopPrice,
+            double tickSize,
+            double tickValue
+        )
+        {
+            // Calculate stop distance in ticks
+            double stopDistanceTicks = Math.Abs(entryPrice - stopPrice) / tickSize;
+
+            // Calculate position size
+            return CalculatePositionSize(riskCapital, stopDistanceTicks, tickValue);
+        }
+
         /// Determines the amount of capital that can be risked based on the account balance
         /// and the selected drawdown mode, then applies the risk percentage.
         public static double CalculateRiskCapital(

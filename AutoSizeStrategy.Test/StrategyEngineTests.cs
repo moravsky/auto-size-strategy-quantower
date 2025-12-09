@@ -1,36 +1,122 @@
-﻿// AutoSizeStrategy.Test\StrategyEngineTests.cs
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading;
 using AutoSizeStrategy;
 using Moq;
-using Moq.Language.Flow; // for It.Is<T>
+using Moq.Language.Flow;
 using TradingPlatform.BusinessLayer;
 using Xunit;
 
 namespace AutoSizeStrategy.Tests
 {
-    /// <summary>
-    /// Tests for <see cref="StrategyEngine"/>.
-    /// </summary>
     public class StrategyEngineTests
     {
         private readonly Mock<IStrategyLogger> _loggerMock;
         private readonly Mock<IStrategyContext> _contextMock;
+        private readonly Mock<IStrategySettings> _settingsMock;
+        private readonly Mock<IAccount> _accountMock;
+        private readonly Mock<ISymbol> _symbolMock;
         private readonly StrategyEngine _engine;
 
         public StrategyEngineTests()
         {
             _loggerMock = new Mock<IStrategyLogger>();
             _contextMock = new Mock<IStrategyContext>();
+            _settingsMock = new Mock<IStrategySettings>();
+            _accountMock = new Mock<IAccount>();
+            _symbolMock = new Mock<ISymbol>();
+
             _contextMock.SetupGet(c => c.Logger).Returns(_loggerMock.Object);
+            _contextMock.SetupGet(c => c.Settings).Returns(_settingsMock.Object);
+
+            _settingsMock.SetupGet(s => s.RiskPercent).Returns(10.0);
+            _settingsMock
+                .SetupGet(s => s.MissingStopLossAction)
+                .Returns(MissingStopLossAction.Reject);
+
+            // Default Account (Sim)
+            _accountMock.SetupGet(a => a.Id).Returns("SimDefault");
+            _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
+
+            // Default Symbol (MES-like)
+            _symbolMock.SetupGet(s => s.TickSize).Returns(0.25);
+            _symbolMock.SetupGet(s => s.Last).Returns(5000.0);
+            _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5.0); // $5/tick
+
             _engine = new StrategyEngine(_contextMock.Object);
         }
+
+        #region Drawdown Logic Tests (Intraday vs EOD vs Static) ----------------
+
+        [Fact]
+        public void ProcessRequest_IntradayAccount_SubtractsBufferFromBalance()
+        {
+            _accountMock.SetupGet(a => a.Id).Returns("TPPRO123456");
+
+            // Balance: 150,000
+            // Risk Budget = 150,000 - 145,500 (Hardcoded Buffer) = $4,500
+            // Risk (10%) = $450
+            _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
+
+            // Create Request with specific risk per contract
+            // Stop: 5 pts = 20 ticks. Value: 20 ticks * $5 = $100 risk per contract.
+            // Expected Qty: $450 / $100 = 4.5 -> Round down to 4.
+            var request = CreateValidRequest(quantity: 100, stopDistancePoints: 5);
+
+            _engine.ProcessRequest(request);
+
+            Assert.Contains("[RiskQty:4]", request.Comment);
+            Assert.Equal(4, request.Quantity);
+        }
+
+        [Fact]
+        public void ProcessRequest_EODAccount_SubtractsBufferFromBalance()
+        {
+            _accountMock.SetupGet(a => a.Id).Returns("TPT987654");
+
+            // Balance: 150,000
+            // Risk budget = $4,500 -> Risk = $450
+            _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
+
+            // Same risk parameters ($100 risk per contract)
+            var request = CreateValidRequest(quantity: 100, stopDistancePoints: 5);
+
+            _engine.ProcessRequest(request);
+
+            Assert.Contains("[RiskQty:4]", request.Comment);
+            Assert.Equal(4, request.Quantity);
+        }
+
+        [Fact]
+        public void ProcessRequest_StaticAccount_UsesFullBalance()
+        {
+            _accountMock.SetupGet(a => a.Id).Returns("SimPersonalAccount");
+
+            // Balance: 150,000
+            // Risk budget = $150,000 (No buffer subtraction)
+            // Risk (10%) = $15,000
+            _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
+
+            // 3. Same risk parameters ($100 risk per contract)
+            // Expected Qty: $15,000 / $100 = 150.
+            var request = CreateValidRequest(quantity: 1000, stopDistancePoints: 5);
+
+            _engine.ProcessRequest(request);
+
+            Assert.Contains("[RiskQty:150]", request.Comment);
+            Assert.Equal(150, request.Quantity);
+        }
+
+        #endregion
 
         #region ProcessRequest ---------------------------------------------
 
         [Fact]
         public void ProcessRequest_AddsTag_WhenCommentIsNull()
         {
-            var request = new PlaceOrderRequestParameters { Comment = null, Quantity = 10 };
+            _accountMock.SetupGet(a => a.Balance).Returns(2000.0);
+            // Risk $200. Stop 5pts ($100/contract). Size = 2.
+            var request = CreateValidRequest(quantity: 10, stopDistancePoints: 5);
 
             _engine.ProcessRequest(request);
 
@@ -41,12 +127,16 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_AppendsTag_ToExistingComment()
         {
-            var request = new PlaceOrderRequestParameters { Comment = "Start here", Quantity = 10 };
+            var request = CreateValidRequest(
+                comment: "Start here",
+                quantity: 10,
+                stopDistancePoints: 5
+            );
 
             _engine.ProcessRequest(request);
 
-            Assert.Equal("Start here [RiskQty:2]", request.Comment);
-            Assert.Equal(2, request.Quantity);
+            Assert.Equal("Start here [RiskQty:150]", request.Comment);
+            Assert.Equal(150, request.Quantity);
         }
 
         [Fact]
@@ -62,7 +152,11 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_Ignores_WhenTagAlreadyPresent()
         {
-            var request = new PlaceOrderRequestParameters { Comment = "[RiskQty:2]", Quantity = 5 };
+            var request = CreateValidRequest(
+                comment: "[RiskQty:2]",
+                quantity: 5,
+                stopDistancePoints: 10
+            );
 
             _engine.ProcessRequest(request);
 
@@ -96,18 +190,39 @@ namespace AutoSizeStrategy.Tests
             Assert.Equal(0, size);
         }
 
+        [Fact]
+        public void TryGetSizeFromTag_ReturnsFalse_WhenNullComment()
+        {
+            bool result = _engine.TryGetSizeFromTag(null, "XYZ", out int size);
+
+            Assert.False(result);
+            Assert.Equal(0, size);
+            _loggerMock.VerifyNoOtherCalls(); // no error logged
+        }
+
+        [Fact]
+        public void TryGetSizeFromTag_LogsError_WhenInvalidTag()
+        {
+            var comment = "[RiskQty:ABC]";
+
+            bool result = _engine.TryGetSizeFromTag(comment, "XYZ", out int size);
+
+            Assert.False(result);
+            Assert.Equal(0, size);
+            _loggerMock.Verify(
+                l => l.LogError(It.Is<string>(s => s.Contains("invalid validation tag"))),
+                Times.Once
+            );
+        }
+
         #endregion
 
-        #region ProcessFailSafe -----------------------------------------------------------
+        #region ProcessFailSafe -------------------------------------------
 
         [Fact]
         public void ProcessFailSafe_LogsWarning_WhenNoTag()
         {
-            var order = new Mock<IOrder>();
-            order.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
-            order.SetupGet(o => o.TotalQuantity).Returns(2);
-            order.SetupGet(o => o.Comment).Returns("Untagged comment");
-            order.SetupGet(o => o.Id).Returns("123");
+            var order = CreateMockOrder(id: "123", qty: 2, comment: "Untagged");
 
             _engine.ProcessFailSafe(order.Object);
 
@@ -121,11 +236,7 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessFailSafe_Cancels_WhenQuantityMismatch()
         {
-            var order = new Mock<IOrder>();
-            order.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
-            order.SetupGet(o => o.TotalQuantity).Returns(5); // wrong size
-            order.SetupGet(o => o.Comment).Returns("[RiskQty:2]");
-            order.SetupGet(o => o.Id).Returns("456");
+            var order = CreateMockOrder(id: "456", qty: 5, comment: "[RiskQty:2]");
 
             _engine.ProcessFailSafe(order.Object);
 
@@ -152,12 +263,12 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_LogsEnforceInfo_WhenQuantityAdjusted()
         {
-            // Quantity is 5 -> should be changed to 2
-            var request = new PlaceOrderRequestParameters { Comment = null, Quantity = 5 };
+            // Quantity is 1 -> should be changed to 75 by the strategy
+            var request = CreateValidRequest(quantity: 1, stopDistancePoints: 10);
 
             _engine.ProcessRequest(request);
 
-            Assert.Equal(2, request.Quantity);
+            Assert.Equal(75, request.Quantity);
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(msg => msg.Contains("[Risk Enforced]"))),
                 Times.Once
@@ -167,37 +278,16 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_DoesNotLog_WhenTagAlreadyPresent()
         {
-            var request = new PlaceOrderRequestParameters { Comment = "[RiskQty:2]", Quantity = 5 };
+            var request = CreateValidRequest(
+                comment: "[RiskQty:2]",
+                quantity: 5,
+                stopDistancePoints: 10
+            );
 
             _engine.ProcessRequest(request);
 
             // No LogInfo should be executed because the method exits early
             _loggerMock.Verify(l => l.LogInfo(It.IsAny<string>()), Times.Never);
-        }
-
-        [Fact]
-        public void TryGetSizeFromTag_ReturnsFalse_WhenNullComment()
-        {
-            bool result = _engine.TryGetSizeFromTag(null, "XYZ", out int size);
-
-            Assert.False(result);
-            Assert.Equal(0, size);
-            _loggerMock.VerifyNoOtherCalls(); // no error logged
-        }
-
-        [Fact]
-        public void TryGetSizeFromTag_LogsError_WhenInvalidTag()
-        {
-            var comment = "[RiskQty:ABC]";
-
-            bool result = _engine.TryGetSizeFromTag(comment, "XYZ", out int size);
-
-            Assert.False(result);
-            Assert.Equal(0, size);
-            _loggerMock.Verify(
-                l => l.LogError(It.Is<string>(s => s.Contains("invalid validation tag"))),
-                Times.Once
-            );
         }
 
         [Fact]
@@ -219,20 +309,43 @@ namespace AutoSizeStrategy.Tests
         }
 
         #endregion
+
+        #region Helpers ---------------------------------------------------
+
+        private PlaceOrderRequestParametersWrapper CreateValidRequest(
+            double quantity,
+            double stopDistancePoints,
+            string? comment = null
+        )
+        {
+            double currentPrice = _symbolMock.Object.Last;
+            double stopPrice = currentPrice - stopDistancePoints;
+
+            var slTpHolder = new Mock<ISlTpHolder>();
+            slTpHolder.SetupGet(h => h.Price).Returns(stopPrice);
+
+            return new PlaceOrderRequestParametersWrapper(
+                comment: comment,
+                quantity: quantity,
+                account: _accountMock.Object,
+                symbol: _symbolMock.Object,
+                price: currentPrice,
+                stopLossItems: [slTpHolder.Object]
+            );
+        }
+
+        private static Mock<IOrder> CreateMockOrder(string id, double qty, string comment)
+        {
+            var order = new Mock<IOrder>();
+            order.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
+            order.SetupGet(o => o.TotalQuantity).Returns(qty);
+            order.SetupGet(o => o.Comment).Returns(comment);
+            order.SetupGet(o => o.Id).Returns(id);
+            return order;
+        }
+
+        #endregion
     }
 
-    // ------------------------------------------------------------
-
-    /// <summary>
-    /// A dummy class used only to exercise the non‑`PlaceOrderRequestParameters`
-    /// branch of <see cref="StrategyEngine.ProcessRequest"/>.
-    /// The real project will have other request types – we just need one here.
-    /// </summary>
-    public class SomeOtherRequestParameters : RequestParameters
-    {
-        // Stub implementation of the abstract Type property.
-        // The exact enum value is irrelevant for the unit tests,
-        // so we cast 0 to the enum type.
-        public override RequestType Type => (RequestType)0;
-    }
+    public class SomeOtherRequestParameters : IRequestParameters { }
 }
