@@ -39,10 +39,10 @@ namespace AutoSizeStrategy
     public class AccountWrapper(string id, double balance) : IAccount
     {
         public AccountWrapper(Account account)
-            : this(id: account.Id, balance: account.Balance) { }
+            : this(id: account?.Id ?? default, balance: account?.Balance ?? default) { }
 
         public AccountWrapper(IAccount account)
-            : this(id: account.Id, balance: account.Balance) { }
+            : this(id: account?.Id ?? default, balance: account?.Balance ?? default) { }
 
         public string Id => id;
         public double Balance => balance;
@@ -63,19 +63,45 @@ namespace AutoSizeStrategy
         public double GetTickCost(double price) => symbol.GetTickCost(price);
     }
 
-    public interface ISlTpHolder
+    public interface IRequestParameters
     {
-        double Price { get; }
+        long RequestId { get; set; }
+        CancellationToken CancellationToken { get; set; }
     }
 
-    public class SlTpHolderWrapper(SlTpHolder slTpHolder) : ISlTpHolder
+    public class RequestParametersWrapper(RequestParameters inner) : IRequestParameters
     {
-        public double Price => slTpHolder.Price;
+        private long _requestId;
+
+        public RequestParameters BaseInner { get; } = inner;
+
+        public long RequestId
+        {
+            get => BaseInner?.RequestId ?? _requestId;
+            set => _requestId = value;
+        }
+
+        public CancellationToken CancellationToken
+        {
+            get => BaseInner?.CancellationToken ?? default;
+            set => BaseInner.CancellationToken = value;
+        }
+
+        public static IRequestParameters Create(RequestParameters request)
+        {
+            return request switch
+            {
+                PlaceOrderRequestParameters p => new PlaceOrderRequestParametersWrapper(p),
+                _ => new RequestParametersWrapper<RequestParameters>(request),
+            };
+        }
     }
 
-    public interface IRequestParameters { }
-
-    public class RequestParametersWrapper(RequestParameters requestParameters) : IRequestParameters { }
+    public class RequestParametersWrapper<T>(T inner) : RequestParametersWrapper(inner)
+        where T : RequestParameters
+    {
+        public T Inner { get; } = inner;
+    }
 
     public interface IPlaceOrderRequestParameters : IRequestParameters
     {
@@ -84,87 +110,56 @@ namespace AutoSizeStrategy
         IAccount Account { get; set; }
         ISymbol Symbol { get; set; }
         double Price { get; set; }
-        List<ISlTpHolder> StopLossItems { get; set; }
-        long RequestId { get; set; }
-        CancellationToken CancellationToken { get; set; }
+        List<SlTpHolder> StopLossItems { get; set; }
     }
 
-    public class PlaceOrderRequestParametersWrapper(
-        string comment,
-        double quantity,
-        IAccount account,
-        ISymbol symbol,
-        double price,
-        List<ISlTpHolder> stopLossItems,
-        long requestId = default,
-        CancellationToken cancellationToken = default
-    ) : IPlaceOrderRequestParameters
+    public class PlaceOrderRequestParametersWrapper(PlaceOrderRequestParameters inner)
+        : RequestParametersWrapper<PlaceOrderRequestParameters>(inner),
+            IPlaceOrderRequestParameters
     {
-        public PlaceOrderRequestParametersWrapper(
-            PlaceOrderRequestParameters placeOrderRequestParameters
-        )
-            : this(
-                comment: placeOrderRequestParameters.Comment,
-                quantity: placeOrderRequestParameters.Quantity,
-                account: new AccountWrapper(placeOrderRequestParameters.Account),
-                symbol: new SymbolWrapper(placeOrderRequestParameters.Symbol),
-                price: placeOrderRequestParameters.Price,
-                stopLossItems:
-                [
-                    .. placeOrderRequestParameters
-                        .StopLossItems.Select(slTpHolder => new SlTpHolderWrapper(slTpHolder))
-                        .Cast<ISlTpHolder>(),
-                ],
-                requestId: placeOrderRequestParameters.RequestId,
-                cancellationToken: placeOrderRequestParameters.CancellationToken
-            ) { }
+        public PlaceOrderRequestParametersWrapper()
+            : this(new PlaceOrderRequestParameters())
+        {
+            Account = new AccountWrapper(Inner.Account);
+            Symbol = new SymbolWrapper(Inner.Symbol);
+        }
 
         public string Comment
         {
-            get => comment;
-            set => comment = value;
+            get => Inner?.Comment ?? default;
+            set => Inner.Comment = value;
         }
 
         public double Quantity
         {
-            get => quantity;
-            set => quantity = value;
+            get => Inner?.Quantity ?? default;
+            set => Inner.Quantity = value;
         }
 
-        public IAccount Account
-        {
-            get => account;
-            set => account = value;
-        }
+        public IAccount Account { get; set; } = default;
 
-        public ISymbol Symbol
-        {
-            get => symbol;
-            set => symbol = value;
-        }
+        public ISymbol Symbol { get; set; } = default;
 
         public double Price
         {
-            get => price;
-            set => price = value;
+            get => Inner.Price;
+            set => Inner.Price = value;
         }
 
-        public List<ISlTpHolder> StopLossItems
+        public List<SlTpHolder> StopLossItems
         {
-            get => stopLossItems;
-            set => stopLossItems = value;
-        }
+            // proxy to inner
+            get => Inner.StopLossItems ?? [];
+            set
+            {
+                var sdkList = Inner.StopLossItems;
+                if (sdkList == null)
+                    return;
 
-        public long RequestId
-        {
-            get => requestId;
-            set => requestId = value;
-        }
-
-        public CancellationToken CancellationToken
-        {
-            get => cancellationToken;
-            set => cancellationToken = value;
+                sdkList.Clear();
+                if (value != null)
+                    sdkList.AddRange(value);
+            }
         }
     }
 }

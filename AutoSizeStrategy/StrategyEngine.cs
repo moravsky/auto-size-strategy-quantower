@@ -16,6 +16,15 @@ namespace AutoSizeStrategy
         [GeneratedRegex(@"TPT\d+", RegexOptions.Compiled)]
         private static partial Regex EndOfDayAccountPattern();
 
+        public void ProcessRequest(RequestParameters requestParameters)
+        {
+            // Delegate the "selection logic" to our Factory
+            var wrapper = RequestParametersWrapper.Create(requestParameters);
+
+            // Pass the result to the main logic
+            ProcessRequest(wrapper);
+        }
+
         public void ProcessRequest(IRequestParameters requestParameters)
         {
             if (requestParameters is not IPlaceOrderRequestParameters placeOrderRequestParameters)
@@ -26,7 +35,12 @@ namespace AutoSizeStrategy
                 placeOrderRequestParameters.Comment != null
                 && placeOrderRequestParameters.Comment.Contains("[RiskQty:")
             )
+            {
+                context.Logger.LogInfo(
+                    "Order request {placeOrderRequestParameters.RequestId} has [RiskQty: comment - passing through unchanged"
+                );
                 return;
+            }
 
             // Check for stop loss
             if (

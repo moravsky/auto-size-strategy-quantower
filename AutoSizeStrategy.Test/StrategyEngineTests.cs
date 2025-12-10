@@ -112,6 +112,25 @@ namespace AutoSizeStrategy.Tests
         #region ProcessRequest ---------------------------------------------
 
         [Fact]
+        public void ProcessRequest_Sdk_PlaceOrderRequestParameters_WrappedCorrectly()
+        {
+            var request = new PlaceOrderRequestParameters { Comment = "[RiskQty:2]", Quantity = 2 };
+            _engine.ProcessRequest(request);
+
+            Assert.Contains("[RiskQty:2]", request.Comment); // passed through comment
+            Assert.Equal(2, request.Quantity); // passed through size
+            _loggerMock.Verify(
+                l =>
+                    l.LogInfo(
+                        It.Is<string>(s =>
+                            s.Contains("has [RiskQty: comment - passing through unchanged")
+                        )
+                    ),
+                Times.Once
+            );
+        }
+
+        [Fact]
         public void ProcessRequest_AddsTag_WhenCommentIsNull()
         {
             _accountMock.SetupGet(a => a.Balance).Returns(2000.0);
@@ -276,7 +295,7 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public void ProcessRequest_DoesNotLog_WhenTagAlreadyPresent()
+        public void ProcessRequest_Logs_WhenTagAlreadyPresent()
         {
             var request = CreateValidRequest(
                 comment: "[RiskQty:2]",
@@ -286,8 +305,15 @@ namespace AutoSizeStrategy.Tests
 
             _engine.ProcessRequest(request);
 
-            // No LogInfo should be executed because the method exits early
-            _loggerMock.Verify(l => l.LogInfo(It.IsAny<string>()), Times.Never);
+            _loggerMock.Verify(
+                l =>
+                    l.LogInfo(
+                        It.Is<string>(s =>
+                            s.Contains("has [RiskQty: comment - passing through unchanged")
+                        )
+                    ),
+                Times.Once
+            );
         }
 
         [Fact]
@@ -321,17 +347,17 @@ namespace AutoSizeStrategy.Tests
             double currentPrice = _symbolMock.Object.Last;
             double stopPrice = currentPrice - stopDistancePoints;
 
-            var slTpHolder = new Mock<ISlTpHolder>();
-            slTpHolder.SetupGet(h => h.Price).Returns(stopPrice);
+            var slTpHolder = SlTpHolder.CreateSL(stopPrice, PriceMeasurement.Absolute);
 
-            return new PlaceOrderRequestParametersWrapper(
-                comment: comment,
-                quantity: quantity,
-                account: _accountMock.Object,
-                symbol: _symbolMock.Object,
-                price: currentPrice,
-                stopLossItems: [slTpHolder.Object]
-            );
+            return new PlaceOrderRequestParametersWrapper
+            {
+                Comment = comment,
+                Quantity = quantity,
+                Account = _accountMock.Object,
+                Symbol = _symbolMock.Object,
+                Price = currentPrice,
+                StopLossItems = [slTpHolder],
+            };
         }
 
         private static Mock<IOrder> CreateMockOrder(string id, double qty, string comment)
@@ -347,5 +373,9 @@ namespace AutoSizeStrategy.Tests
         #endregion
     }
 
-    public class SomeOtherRequestParameters : IRequestParameters { }
+    public class SomeOtherRequestParameters : IRequestParameters
+    {
+        public long RequestId { get; set; } = default;
+        public CancellationToken CancellationToken { get; set; } = default;
+    }
 }
