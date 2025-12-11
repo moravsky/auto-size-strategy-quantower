@@ -12,7 +12,16 @@ namespace AutoSizeStrategy
         [InputParameter("Risk Percent", minimum: 1.0, maximum: 100.0, increment: 1.0)]
         public double RiskPercent { get; set; } = 10.0;
 
-        [InputParameter("Action on Missing Stop Loss")]
+        [InputParameter(
+            "Action on Missing Stop Loss",
+            variants: new object[]
+            {
+                "Reject",
+                MissingStopLossAction.Reject,
+                "Ignore",
+                MissingStopLossAction.Ignore,
+            }
+        )]
         public MissingStopLossAction MissingStopLossAction { get; set; } =
             MissingStopLossAction.Reject;
 
