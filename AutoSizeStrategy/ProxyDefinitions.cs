@@ -92,6 +92,7 @@ namespace AutoSizeStrategy
             return request switch
             {
                 PlaceOrderRequestParameters p => new PlaceOrderRequestParametersWrapper(p),
+                // TODO: Check if we need to handle ModifyOrderRequestParameters
                 _ => new RequestParametersWrapper<RequestParameters>(request),
             };
         }

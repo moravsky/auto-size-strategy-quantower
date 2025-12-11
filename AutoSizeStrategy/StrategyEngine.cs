@@ -37,7 +37,7 @@ namespace AutoSizeStrategy
             )
             {
                 context.Logger.LogInfo(
-                    "Order request {placeOrderRequestParameters.RequestId} has [RiskQty: comment - passing through unchanged"
+                    $"Order request {placeOrderRequestParameters.RequestId} has [RiskQty: comment - passing through unchanged"
                 );
                 return;
             }
@@ -59,7 +59,7 @@ namespace AutoSizeStrategy
                 else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
                 {
                     context.Logger.LogInfo(
-                        "Order request {placeOrderRequestParameters.RequestId} has no stop loss - passing through unchanged"
+                        $"Order request {placeOrderRequestParameters.RequestId} has no stop loss - passing through unchanged"
                     );
                     return;
                 }
@@ -108,7 +108,7 @@ namespace AutoSizeStrategy
             if (placeOrderRequestParameters.Quantity != calculatedSize)
             {
                 context.Logger.LogInfo(
-                    $"[Risk Enforced] request {placeOrderRequestParameters.RequestId} changed quantity from {placeOrderRequestParameters.Quantity} to {calculatedSize}"
+                    $"Changed request {placeOrderRequestParameters.RequestId} quantity from {placeOrderRequestParameters.Quantity} to {calculatedSize}"
                 );
             }
             placeOrderRequestParameters.Quantity = calculatedSize;
@@ -155,9 +155,9 @@ namespace AutoSizeStrategy
             else
             {
                 context.Logger.LogInfo(
-                    $"[FAIL-SAFE] Order {order.Id} does not have a size tag, using default of 2"
+                    $"Order {order.Id} does not have a size tag, using default of 2"
                 );
-                // TODO: change ProcessFailSafe to verify order correctness a different way,
+                // TODO: Change ProcessFailSafe to verify order correctness a different way,
                 // e.g. by checking the order size against the risk capital
                 correctSize = 2;
             }
@@ -165,7 +165,7 @@ namespace AutoSizeStrategy
             if (Math.Abs(order.TotalQuantity - correctSize) > 0.001)
             {
                 context.Logger.LogInfo(
-                    $"[FAIL-SAFE] Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {correctSize}."
+                    $"Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {correctSize}."
                 );
                 try
                 {
@@ -173,9 +173,7 @@ namespace AutoSizeStrategy
                 }
                 catch (Exception ex)
                 {
-                    context.Logger.LogError(
-                        $"[FAIL-SAFE] Order {order.Id} cancelation failed: {ex.Message}"
-                    );
+                    context.Logger.LogError($"Order {order.Id} cancelation failed: {ex.Message}");
                 }
             }
         }
@@ -191,9 +189,7 @@ namespace AutoSizeStrategy
                 }
                 else
                 {
-                    context.Logger.LogError(
-                        $"[FAIL-SAFE] Order {orderId} has invalid validation tag."
-                    );
+                    context.Logger.LogError($"Order {orderId} has invalid validation tag.");
                 }
             }
             taggedSize = 0;

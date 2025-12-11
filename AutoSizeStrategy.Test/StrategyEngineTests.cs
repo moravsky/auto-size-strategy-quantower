@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using System.Threading;
 using AutoSizeStrategy;
 using Moq;
@@ -327,7 +328,7 @@ namespace AutoSizeStrategy.Tests
 
             Assert.Equal(75, request.Quantity);
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(msg => msg.Contains("[Risk Enforced]"))),
+                l => l.LogInfo(It.Is<string>(msg => msg.Contains("Changed request"))),
                 Times.Once
             );
         }
