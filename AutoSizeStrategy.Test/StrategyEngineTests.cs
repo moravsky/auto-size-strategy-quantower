@@ -144,6 +144,44 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
+        public void ProcessRequest_Cancels_WhenNoStopLossReject()
+        {
+            _settingsMock
+                .SetupGet(s => s.MissingStopLossAction)
+                .Returns(MissingStopLossAction.Reject);
+
+            var request = CreateValidRequest(quantity: 10, stopDistancePoints: 5);
+            request.StopLossItems.Clear();
+
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(0, request.Quantity);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("cancelled: stop loss required"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public void ProcessRequest_Ignores_WhenNoStopLossIgnore()
+        {
+            _settingsMock
+                .SetupGet(s => s.MissingStopLossAction)
+                .Returns(MissingStopLossAction.Ignore);
+
+            var request = CreateValidRequest(quantity: 10, stopDistancePoints: 5);
+            request.StopLossItems.Clear();
+
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(10, request.Quantity);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("passing through unchanged"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
         public void ProcessRequest_AppendsTag_ToExistingComment()
         {
             var request = CreateValidRequest(
