@@ -53,9 +53,7 @@ namespace AutoSizeStrategy
                     context.Logger.LogInfo(
                         $"Order request {placeOrderRequestParameters.RequestId} cancelled: stop loss required"
                     );
-                    placeOrderRequestParameters.CancellationToken = new CancellationToken(
-                        canceled: true
-                    );
+                    placeOrderRequestParameters.Quantity = 0;
                     return;
                 }
                 else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
