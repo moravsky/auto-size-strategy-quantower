@@ -69,7 +69,6 @@ namespace AutoSizeStrategy.Tests
 
             _engine.ProcessRequest(request);
 
-            Assert.Contains("[RiskQty:4]", request.Comment);
             Assert.Equal(4, request.Quantity);
         }
 
@@ -87,7 +86,6 @@ namespace AutoSizeStrategy.Tests
 
             _engine.ProcessRequest(request);
 
-            Assert.Contains("[RiskQty:4]", request.Comment);
             Assert.Equal(4, request.Quantity);
         }
 
@@ -107,7 +105,6 @@ namespace AutoSizeStrategy.Tests
 
             _engine.ProcessRequest(request);
 
-            Assert.Contains("[RiskQty:150]", request.Comment);
             Assert.Equal(150, request.Quantity);
         }
 
@@ -118,20 +115,10 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_Sdk_PlaceOrderRequestParameters_WrappedCorrectly()
         {
-            var request = new PlaceOrderRequestParameters { Comment = "[RiskQty:2]", Quantity = 2 };
+            var request = new PlaceOrderRequestParameters { Quantity = 2 };
             _engine.ProcessRequest(request);
 
-            Assert.Contains("[RiskQty:2]", request.Comment); // passed through comment
-            Assert.Equal(2, request.Quantity); // passed through size
-            _loggerMock.Verify(
-                l =>
-                    l.LogInfo(
-                        It.Is<string>(s =>
-                            s.Contains("has [RiskQty: comment - passing through unchanged")
-                        )
-                    ),
-                Times.Once
-            );
+            Assert.Equal(0, request.Quantity); // set to 0 without SL
         }
 
         [Fact]
@@ -143,7 +130,6 @@ namespace AutoSizeStrategy.Tests
 
             _engine.ProcessRequest(request);
 
-            Assert.Contains("[RiskQty:2]", request.Comment);
             Assert.Equal(2, request.Quantity); // enforced size
         }
 
@@ -188,15 +174,10 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_AppendsTag_ToExistingComment()
         {
-            var request = CreateValidRequest(
-                comment: "Start here",
-                quantity: 10,
-                stopDistancePoints: 5
-            );
+            var request = CreateValidRequest(quantity: 10, stopDistancePoints: 5);
 
             _engine.ProcessRequest(request);
 
-            Assert.Equal("Start here [RiskQty:150]", request.Comment);
             Assert.Equal(150, request.Quantity);
         }
 
@@ -210,99 +191,19 @@ namespace AutoSizeStrategy.Tests
             // No changes expected – no exception must be thrown
         }
 
-        [Fact]
-        public void ProcessRequest_Ignores_WhenTagAlreadyPresent()
-        {
-            var request = CreateValidRequest(
-                comment: "[RiskQty:2]",
-                quantity: 5,
-                stopDistancePoints: 10
-            );
-
-            _engine.ProcessRequest(request);
-
-            // Tag is untouched – quantity should still be original if the method exits early
-            Assert.Equal("[RiskQty:2]", request.Comment);
-            // The implementation sets quantity only on the first run; if early exit, quantity stays 5
-            Assert.Equal(5, request.Quantity);
-        }
-
-        #endregion
-
-        #region TryGetSizeFromTag -------------------------------------------
-
-        [Fact]
-        public void TryGetSizeFromTag_ReturnsTrue_WhenTagPresent()
-        {
-            var comment = "Random text [RiskQty:5] more";
-            bool result = _engine.TryGetSizeFromTag(comment, string.Empty, out int size);
-
-            Assert.True(result);
-            Assert.Equal(5, size);
-        }
-
-        [Fact]
-        public void TryGetSizeFromTag_ReturnsFalse_WhenTagMissing()
-        {
-            var comment = "No tag here";
-            bool result = _engine.TryGetSizeFromTag(comment, string.Empty, out int size);
-
-            Assert.False(result);
-            Assert.Equal(0, size);
-        }
-
-        [Fact]
-        public void TryGetSizeFromTag_ReturnsFalse_WhenNullComment()
-        {
-            bool result = _engine.TryGetSizeFromTag(null, "XYZ", out int size);
-
-            Assert.False(result);
-            Assert.Equal(0, size);
-            _loggerMock.VerifyNoOtherCalls(); // no error logged
-        }
-
-        [Fact]
-        public void TryGetSizeFromTag_LogsError_WhenInvalidTag()
-        {
-            var comment = "[RiskQty:ABC]";
-
-            bool result = _engine.TryGetSizeFromTag(comment, "XYZ", out int size);
-
-            Assert.False(result);
-            Assert.Equal(0, size);
-            _loggerMock.Verify(
-                l => l.LogError(It.Is<string>(s => s.Contains("invalid validation tag"))),
-                Times.Once
-            );
-        }
-
         #endregion
 
         #region ProcessFailSafe -------------------------------------------
 
         [Fact]
-        public void ProcessFailSafe_LogsWarning_WhenNoTag()
-        {
-            var order = CreateMockOrder(id: "123", qty: 2, comment: "Untagged");
-
-            _engine.ProcessFailSafe(order.Object);
-
-            _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("does not have a size tag"))),
-                Times.Once
-            );
-            order.Verify(o => o.Cancel(), Times.Never);
-        }
-
-        [Fact]
         public void ProcessFailSafe_Cancels_WhenQuantityMismatch()
         {
-            var order = CreateMockOrder(id: "456", qty: 5, comment: "[RiskQty:2]");
+            var order = CreateMockOrder(id: "456", qty: 5);
 
             _engine.ProcessFailSafe(order.Object);
 
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("Killing Order"))),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Cancelling order"))),
                 Times.Once
             );
             _orderKillerMock.Verify(
@@ -340,23 +241,15 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public void ProcessRequest_Logs_WhenTagAlreadyPresent()
+        public void ProcessRequest_Logs_WhenRequestAlreadyProcessed()
         {
-            var request = CreateValidRequest(
-                comment: "[RiskQty:2]",
-                quantity: 5,
-                stopDistancePoints: 10
-            );
-
+            var request = new PlaceOrderRequestParameters { Quantity = 0 };
+            _engine.ProcessRequest(request);
             _engine.ProcessRequest(request);
 
+            Assert.Equal(0, request.Quantity); // passed through size
             _loggerMock.Verify(
-                l =>
-                    l.LogInfo(
-                        It.Is<string>(s =>
-                            s.Contains("has [RiskQty: comment - passing through unchanged")
-                        )
-                    ),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("passing through unchanged"))),
                 Times.Once
             );
         }
@@ -367,8 +260,7 @@ namespace AutoSizeStrategy.Tests
 
         private PlaceOrderRequestParametersWrapper CreateValidRequest(
             double quantity,
-            double stopDistancePoints,
-            string? comment = null
+            double stopDistancePoints
         )
         {
             double currentPrice = _symbolMock.Object.Last;
@@ -378,7 +270,6 @@ namespace AutoSizeStrategy.Tests
 
             return new PlaceOrderRequestParametersWrapper
             {
-                Comment = comment,
                 Quantity = quantity,
                 Account = _accountMock.Object,
                 Symbol = _symbolMock.Object,
@@ -387,12 +278,11 @@ namespace AutoSizeStrategy.Tests
             };
         }
 
-        private static Mock<IOrder> CreateMockOrder(string id, double qty, string comment)
+        private static Mock<IOrder> CreateMockOrder(string id, double qty)
         {
             var order = new Mock<IOrder>();
             order.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
             order.SetupGet(o => o.TotalQuantity).Returns(qty);
-            order.SetupGet(o => o.Comment).Returns(comment);
             order.SetupGet(o => o.Id).Returns(id);
             return order;
         }
