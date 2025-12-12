@@ -5,7 +5,8 @@ using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
-    public partial class StrategyEngine(IStrategyContext context)
+    // TODO: Run StrategyEngine on a backgroud thread to unblock UI during debugging
+    public partial class StrategyEngine(IStrategyContext context) : IDisposable
     {
         [GeneratedRegex(@"\[RiskQty:((?s).)+\]", RegexOptions.Compiled)]
         private static partial Regex TagRegex();
@@ -86,7 +87,7 @@ namespace AutoSizeStrategy
             double tickSize = symbol.TickSize;
             double tickValue = symbol.GetTickCost(symbol.Last);
 
-            // Calculate position size using new overload
+            // Calculate position size
             int calculatedSize = RiskCalculator.CalculatePositionSize(
                 riskCapital,
                 entryPrice,
@@ -124,6 +125,11 @@ namespace AutoSizeStrategy
                 : $"{placeOrderRequestParameters.Comment} {tag}";
         }
 
+        public void ReportOrderRemoved(string orderId)
+        {
+            context.OrderKiller.ReportCancelledOrder(orderId);
+        }
+
         private DrawdownMode InferDrawdownMode(string accountId)
         {
             if (IntradayAccountPattern().IsMatch(accountId))
@@ -148,7 +154,13 @@ namespace AutoSizeStrategy
 
             double correctSize;
 
-            if (TryGetSizeFromTag(order.Comment, order.Id, out int taggedSize))
+            if (
+                TryGetSizeFromTag(
+                    comment: order.Comment,
+                    orderId: order.Id,
+                    taggedSize: out int taggedSize
+                )
+            )
             {
                 correctSize = taggedSize;
             }
@@ -167,14 +179,8 @@ namespace AutoSizeStrategy
                 context.Logger.LogInfo(
                     $"Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {correctSize}."
                 );
-                try
-                {
-                    order.Cancel();
-                }
-                catch (Exception ex)
-                {
-                    context.Logger.LogError($"Order {order.Id} cancelation failed: {ex.Message}");
-                }
+                context.OrderKiller.Kill(order);
+                // TODO: V2: Respect the MissingStopLossAction (more order/request tracking)
             }
         }
 
@@ -194,6 +200,12 @@ namespace AutoSizeStrategy
             }
             taggedSize = 0;
             return false;
+        }
+
+        public void Dispose()
+        {
+            context.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 }

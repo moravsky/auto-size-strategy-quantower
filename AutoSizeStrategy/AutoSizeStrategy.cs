@@ -4,8 +4,9 @@ using TradingPlatform.BusinessLayer.Utils;
 
 namespace AutoSizeStrategy
 {
-    public class AutoSizeStrategy : Strategy, IStrategyLogger, IStrategySettings
+    public class AutoSizeStrategy : Strategy, IStrategyLogger, IStrategySettings, IDisposable
     {
+        private bool _disposed;
         private string _instanceId;
         private StrategyEngine strategyEngine;
 
@@ -30,7 +31,7 @@ namespace AutoSizeStrategy
             this.Name = "AutoSizeStrategy42";
             this.Description =
                 "Size orders for ALL symbols and accounts according to risk parameters.";
-            var context = new StrategyContext(this, this);
+            var context = new StrategyContext(this);
             this.strategyEngine = new StrategyEngine(context);
         }
 
@@ -43,6 +44,7 @@ namespace AutoSizeStrategy
         {
             Core.OrderAdded += OnOrderAdded;
             Core.NewRequest += this.CoreNewRequest;
+            Core.OrderRemoved += this.CoreOrderRemoved;
         }
 
         private void CoreNewRequest(object sender, RequestEventArgs e)
@@ -60,18 +62,32 @@ namespace AutoSizeStrategy
 
         protected override void OnStop()
         {
-            UnsubscribeEvents();
+            Dispose();
         }
 
         protected override void OnRemove()
         {
-            UnsubscribeEvents();
+            Dispose();
         }
 
-        protected void UnsubscribeEvents()
+        void IDisposable.Dispose()
         {
-            Core.OrderAdded -= OnOrderAdded;
-            Core.NewRequest -= this.CoreNewRequest;
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        public void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                Core.OrderAdded -= OnOrderAdded;
+                Core.NewRequest -= this.CoreNewRequest;
+                Core.OrderRemoved -= this.CoreOrderRemoved;
+
+                strategyEngine.Dispose();
+                base.Dispose();
+            }
+            _disposed = true;
         }
 
         private void OnOrderAdded(Order order)
@@ -80,6 +96,19 @@ namespace AutoSizeStrategy
             {
                 var orderWrapper = new OrderWrapper(order);
                 strategyEngine.ProcessFailSafe(orderWrapper);
+            }
+            catch (Exception ex)
+            {
+                LogError($"OnOrderAdded failed for order {order.Id}: {ex}");
+                throw;
+            }
+        }
+
+        private void CoreOrderRemoved(Order order)
+        {
+            try
+            {
+                strategyEngine.ReportOrderRemoved(order.Id);
             }
             catch (Exception ex)
             {

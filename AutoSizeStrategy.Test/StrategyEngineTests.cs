@@ -15,6 +15,7 @@ namespace AutoSizeStrategy.Tests
         private readonly Mock<IStrategyLogger> _loggerMock;
         private readonly Mock<IStrategyContext> _contextMock;
         private readonly Mock<IStrategySettings> _settingsMock;
+        private readonly Mock<IOrderKiller> _orderKillerMock;
         private readonly Mock<IAccount> _accountMock;
         private readonly Mock<ISymbol> _symbolMock;
         private readonly StrategyEngine _engine;
@@ -24,11 +25,13 @@ namespace AutoSizeStrategy.Tests
             _loggerMock = new Mock<IStrategyLogger>();
             _contextMock = new Mock<IStrategyContext>();
             _settingsMock = new Mock<IStrategySettings>();
+            _orderKillerMock = new Mock<IOrderKiller>();
             _accountMock = new Mock<IAccount>();
             _symbolMock = new Mock<ISymbol>();
 
             _contextMock.SetupGet(c => c.Logger).Returns(_loggerMock.Object);
             _contextMock.SetupGet(c => c.Settings).Returns(_settingsMock.Object);
+            _contextMock.SetupGet(c => c.OrderKiller).Returns(_orderKillerMock.Object);
 
             _settingsMock.SetupGet(s => s.RiskPercent).Returns(10.0);
             _settingsMock
@@ -302,7 +305,10 @@ namespace AutoSizeStrategy.Tests
                 l => l.LogInfo(It.Is<string>(s => s.Contains("Killing Order"))),
                 Times.Once
             );
-            order.Verify(o => o.Cancel(), Times.Once);
+            _orderKillerMock.Verify(
+                k => k.Kill(It.Is<IOrder>(i => i.Id.Equals("456"))),
+                Times.Once
+            );
         }
 
         [Fact]
@@ -351,24 +357,6 @@ namespace AutoSizeStrategy.Tests
                             s.Contains("has [RiskQty: comment - passing through unchanged")
                         )
                     ),
-                Times.Once
-            );
-        }
-
-        [Fact]
-        public void ProcessFailSafe_LogsError_WhenCancelThrows()
-        {
-            var order = new Mock<IOrder>();
-            order.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
-            order.SetupGet(o => o.TotalQuantity).Returns(5); // mismatch
-            order.SetupGet(o => o.Comment).Returns("[RiskQty:2]");
-            order.SetupGet(o => o.Id).Returns("XYZ");
-            order.Setup(o => o.Cancel()).Throws<InvalidOperationException>(); // simulate failure
-
-            _engine.ProcessFailSafe(order.Object);
-
-            _loggerMock.Verify(
-                l => l.LogError(It.Is<string>(s => s.Contains("cancelation failed"))),
                 Times.Once
             );
         }
