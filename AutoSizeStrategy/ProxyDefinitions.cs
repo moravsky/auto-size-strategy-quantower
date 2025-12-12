@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using TradingPlatform.BusinessLayer;
@@ -7,25 +8,33 @@ namespace AutoSizeStrategy
 {
     public interface IOrder
     {
+        IAccount Account { get; }
         string Id { get; }
-        string Comment { get; }
+        double Price { get; }
         double TotalQuantity { get; }
         OrderStatus Status { get; }
+        SlTpHolder[] StopLossItems { get; }
+        ISymbol Symbol { get; }
         TradingOperationResult Cancel();
     }
 
     public class OrderWrapper(Order order) : IOrder
     {
+        public IAccount Account => new AccountWrapper(order.Account);
+
         public string Id => order.Id;
-        public string Comment
-        {
-            get => order.Comment;
-        }
+
+        public double Price => order.Price;
+
         public double TotalQuantity
         {
             get => order.TotalQuantity;
         }
         public OrderStatus Status => order.Status;
+
+        public SlTpHolder[] StopLossItems => order.StopLossItems ?? [];
+
+        public ISymbol Symbol => new SymbolWrapper(order.Symbol);
 
         public TradingOperationResult Cancel() => order.Cancel();
     }
@@ -106,7 +115,6 @@ namespace AutoSizeStrategy
 
     public interface IPlaceOrderRequestParameters : IRequestParameters
     {
-        string Comment { get; set; }
         double Quantity { get; set; }
         IAccount Account { get; set; }
         ISymbol Symbol { get; set; }
@@ -123,12 +131,6 @@ namespace AutoSizeStrategy
         {
             Account = new AccountWrapper(Inner.Account);
             Symbol = new SymbolWrapper(Inner.Symbol);
-        }
-
-        public string Comment
-        {
-            get => Inner?.Comment ?? default;
-            set => Inner.Comment = value;
         }
 
         public double Quantity

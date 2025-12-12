@@ -17,6 +17,9 @@ namespace AutoSizeStrategy
         [GeneratedRegex(@"TPT\d+", RegexOptions.Compiled)]
         private static partial Regex EndOfDayAccountPattern();
 
+        private readonly TrackingSet<long> _processedRequests = new();
+        private readonly TrackingSet<string> _processedOrders = new();
+
         public void ProcessRequest(RequestParameters requestParameters)
         {
             // Delegate the "selection logic" to our Factory
@@ -32,13 +35,10 @@ namespace AutoSizeStrategy
                 return;
 
             // Idempotency check
-            if (
-                placeOrderRequestParameters.Comment != null
-                && placeOrderRequestParameters.Comment.Contains("[RiskQty:")
-            )
+            if (!_processedRequests.TryTrack(placeOrderRequestParameters.RequestId))
             {
                 context.Logger.LogInfo(
-                    $"Order request {placeOrderRequestParameters.RequestId} has [RiskQty: comment - passing through unchanged"
+                    $"Order request {placeOrderRequestParameters.RequestId} has already been processed - passing through unchanged"
                 );
                 return;
             }
@@ -113,16 +113,6 @@ namespace AutoSizeStrategy
                 );
             }
             placeOrderRequestParameters.Quantity = calculatedSize;
-
-            // Update tag
-            string tag = $"[RiskQty:{calculatedSize}]";
-
-            // Append safely
-            placeOrderRequestParameters.Comment = string.IsNullOrEmpty(
-                placeOrderRequestParameters.Comment
-            )
-                ? tag
-                : $"{placeOrderRequestParameters.Comment} {tag}";
         }
 
         public void ReportOrderRemoved(string orderId)
@@ -152,59 +142,72 @@ namespace AutoSizeStrategy
             if (order.Status != OrderStatus.Opened)
                 return;
 
-            double correctSize;
+            // idempotency check
+            if (!_processedOrders.TryTrack(order.Id))
+                return;
 
-            if (
-                TryGetSizeFromTag(
-                    comment: order.Comment,
-                    orderId: order.Id,
-                    taggedSize: out int taggedSize
-                )
-            )
+            // Check for stop loss
+            if (order.StopLossItems.Length == 0)
             {
-                correctSize = taggedSize;
+                if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
+                {
+                    context.Logger.LogInfo($"Cancelling order {order.Id}: missing stop loss");
+                    context.OrderKiller.Kill(order);
+                    return;
+                }
+                else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
+                {
+                    context.Logger.LogInfo(
+                        $"Order {order.Id} has no stop loss - passing through unchanged"
+                    );
+                    return;
+                }
             }
-            else
+
+            // Infer drawdown mode
+            string accountId = order.Account.Id;
+            DrawdownMode drawdownMode = InferDrawdownMode(accountId);
+
+            // Wrap account
+            var wrappedAccount = new AccountWrapper(order.Account);
+
+            // Calculate risk capital
+            double riskCapital = RiskCalculator.CalculateRiskCapital(
+                wrappedAccount,
+                context.Settings.RiskPercent,
+                drawdownMode
+            );
+
+            // Get symbol data
+            var symbol = order.Symbol;
+            double entryPrice = order.Price;
+            double stopPrice = order.StopLossItems[0].Price;
+            double tickSize = symbol.TickSize;
+            double tickValue = symbol.GetTickCost(symbol.Last);
+
+            // Calculate position size
+            int calculatedSize = RiskCalculator.CalculatePositionSize(
+                riskCapital,
+                entryPrice,
+                stopPrice,
+                tickSize,
+                tickValue
+            );
+
+            if (Math.Abs(order.TotalQuantity - calculatedSize) > 0.001)
             {
                 context.Logger.LogInfo(
-                    $"Order {order.Id} does not have a size tag, using default of 2"
-                );
-                // TODO: Change ProcessFailSafe to verify order correctness a different way,
-                // e.g. by checking the order size against the risk capital
-                correctSize = 2;
-            }
-
-            if (Math.Abs(order.TotalQuantity - correctSize) > 0.001)
-            {
-                context.Logger.LogInfo(
-                    $"Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {correctSize}."
+                    $"Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {calculatedSize}."
                 );
                 context.OrderKiller.Kill(order);
-                // TODO: V2: Respect the MissingStopLossAction (more order/request tracking)
             }
-        }
-
-        public bool TryGetSizeFromTag(string comment, string orderId, out int taggedSize)
-        {
-            var match = TagRegex().Match(comment ?? "");
-            if (match.Success && match.Groups.Count > 1 && match.Groups[1].Success)
-            {
-                if (int.TryParse(match.Groups[1].Value, out taggedSize))
-                {
-                    return true;
-                }
-                else
-                {
-                    context.Logger.LogError($"Order {orderId} has invalid validation tag.");
-                }
-            }
-            taggedSize = 0;
-            return false;
         }
 
         public void Dispose()
         {
             context.Dispose();
+            _processedOrders.Dispose();
+            _processedRequests.Dispose();
             GC.SuppressFinalize(this);
         }
     }
