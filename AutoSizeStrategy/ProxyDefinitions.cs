@@ -11,7 +11,7 @@ namespace AutoSizeStrategy
         string Comment { get; }
         double TotalQuantity { get; }
         OrderStatus Status { get; }
-        void Cancel();
+        TradingOperationResult Cancel();
     }
 
     public class OrderWrapper(Order order) : IOrder
@@ -27,7 +27,7 @@ namespace AutoSizeStrategy
         }
         public OrderStatus Status => order.Status;
 
-        public void Cancel() => order.Cancel();
+        public TradingOperationResult Cancel() => order.Cancel();
     }
 
     public interface IAccount
