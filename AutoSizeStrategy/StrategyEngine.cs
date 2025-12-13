@@ -83,16 +83,21 @@ namespace AutoSizeStrategy
             // Get symbol data
             var symbol = placeOrderRequestParameters.Symbol;
             double entryPrice = placeOrderRequestParameters.Price;
-            double stopPrice = placeOrderRequestParameters.StopLossItems[0].Price;
             double tickSize = symbol.TickSize;
             double tickValue = symbol.GetTickCost(symbol.Last);
+
+            // Caculate stop loss price
+            var slTpHolder = placeOrderRequestParameters.StopLossItems[0];
+            double stopDistanceTicks = RiskCalculator.GetStopDistanceTicks(
+                slTpHolder,
+                tickSize,
+                entryPrice
+            );
 
             // Calculate position size
             int calculatedSize = RiskCalculator.CalculatePositionSize(
                 riskCapital,
-                entryPrice,
-                stopPrice,
-                tickSize,
+                stopDistanceTicks,
                 tickValue
             );
 
@@ -181,16 +186,21 @@ namespace AutoSizeStrategy
             // Get symbol data
             var symbol = order.Symbol;
             double entryPrice = order.Price;
-            double stopPrice = order.StopLossItems[0].Price;
             double tickSize = symbol.TickSize;
             double tickValue = symbol.GetTickCost(symbol.Last);
+
+            // Caculate stop loss price
+            var slTpHolder = order.StopLossItems[0];
+            double stopDistanceTicks = RiskCalculator.GetStopDistanceTicks(
+                slTpHolder,
+                tickSize,
+                entryPrice
+            );
 
             // Calculate position size
             int calculatedSize = RiskCalculator.CalculatePositionSize(
                 riskCapital,
-                entryPrice,
-                stopPrice,
-                tickSize,
+                stopDistanceTicks,
                 tickValue
             );
 
