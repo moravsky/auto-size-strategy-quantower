@@ -58,7 +58,7 @@ namespace AutoSizeStrategy.Test
         [InlineData(-100, 20, 5)] // negative risk
         [InlineData(500, 0, 5)] // zero stop
         [InlineData(500, 20, 0)] // zero tick value
-        public void CalculatePositionSize_InvalidInputs_ThrowsArgumentException(
+        public void CalculatePositionSize3_InvalidInputs_ThrowsArgumentException(
             decimal risk,
             decimal stop,
             decimal tickVal
@@ -66,6 +66,68 @@ namespace AutoSizeStrategy.Test
         {
             Assert.Throws<ArgumentException>(() =>
                 RiskCalculator.CalculatePositionSize((double)risk, (double)stop, (double)tickVal)
+            );
+        }
+
+        [Theory]
+        [InlineData(1000, 6000, 6005, 0, 50)] // zero tick size
+        [InlineData(1000, 6000, 6005, -0.25, 50)] // negative tick size
+        public void CalculatePositionSize5_InvalidInputs_ThrowsArgumentException(
+            double riskCapital,
+            double entryPrice,
+            double stopPrice,
+            double tickSize,
+            double tickValue
+        )
+        {
+            Assert.Throws<ArgumentException>(() =>
+                RiskCalculator.CalculatePositionSize(
+                    riskCapital,
+                    entryPrice,
+                    stopPrice,
+                    tickSize,
+                    tickValue
+                )
+            );
+        }
+
+        [Fact]
+        public void GetStopDistanceTicks_AbsolutePriceMeasurement_ReturnsCorrect()
+        {
+            var slTpHolder = SlTpHolder.CreateSL(5995, PriceMeasurement.Absolute);
+            double stopDistanceTicks = RiskCalculator.GetStopDistanceTicks(slTpHolder, 0.25, 6000);
+            Assert.Equal(20, stopDistanceTicks);
+        }
+
+        [Fact]
+        public void GetStopDistanceTicks_OffsetPriceMeasurement_ReturnsCorrect()
+        {
+            var slTpHolder = SlTpHolder.CreateSL(32, PriceMeasurement.Offset);
+            double stopDistanceTicks = RiskCalculator.GetStopDistanceTicks(slTpHolder, 0.25, 6000);
+            Assert.Equal(32, stopDistanceTicks);
+        }
+
+        [Theory]
+        [InlineData(6000, 6005, 0)] // zero tick size
+        [InlineData(6000, 6005, -0.25)] // negative tick size
+        public void GetStopDistanceTicks_InvalidInputs_ThrowsArgumentException(
+            double entryPrice,
+            double stopPrice,
+            double tickSize
+        )
+        {
+            var slTpHolder = SlTpHolder.CreateSL(stopPrice, PriceMeasurement.Absolute);
+            Assert.Throws<ArgumentException>(() =>
+                RiskCalculator.GetStopDistanceTicks(slTpHolder, tickSize, entryPrice)
+            );
+        }
+
+        [Fact]
+        public void GetStopDistanceTicks_InvalidPriceMeasurement_ThrowsArgumentException()
+        {
+            var slTpHolder = SlTpHolder.CreateSL(5995, (PriceMeasurement)12314L);
+            Assert.Throws<ArgumentException>(() =>
+                RiskCalculator.GetStopDistanceTicks(slTpHolder, 0.25, 6000)
             );
         }
 

@@ -65,7 +65,7 @@ namespace AutoSizeStrategy.Tests
             // Create Request with specific risk per contract
             // Stop: 5 pts = 20 ticks. Value: 20 ticks * $5 = $100 risk per contract.
             // Expected Qty: $450 / $100 = 4.5 -> Round down to 4.
-            var request = CreateValidRequest(quantity: 100, stopDistancePoints: 5);
+            var request = CreateValidRequest(quantity: 100, stopDistanceTicks: 20);
 
             _engine.ProcessRequest(request);
 
@@ -82,7 +82,7 @@ namespace AutoSizeStrategy.Tests
             _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
 
             // Same risk parameters ($100 risk per contract)
-            var request = CreateValidRequest(quantity: 100, stopDistancePoints: 5);
+            var request = CreateValidRequest(quantity: 100, stopDistanceTicks: 20);
 
             _engine.ProcessRequest(request);
 
@@ -101,7 +101,7 @@ namespace AutoSizeStrategy.Tests
 
             // 3. Same risk parameters ($100 risk per contract)
             // Expected Qty: $15,000 / $100 = 150.
-            var request = CreateValidRequest(quantity: 1000, stopDistancePoints: 5);
+            var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
 
             _engine.ProcessRequest(request);
 
@@ -126,7 +126,7 @@ namespace AutoSizeStrategy.Tests
         {
             _accountMock.SetupGet(a => a.Balance).Returns(2000.0);
             // Risk $200. Stop 5pts ($100/contract). Size = 2.
-            var request = CreateValidRequest(quantity: 10, stopDistancePoints: 5);
+            var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
 
             _engine.ProcessRequest(request);
 
@@ -140,7 +140,7 @@ namespace AutoSizeStrategy.Tests
                 .SetupGet(s => s.MissingStopLossAction)
                 .Returns(MissingStopLossAction.Reject);
 
-            var request = CreateValidRequest(quantity: 10, stopDistancePoints: 5);
+            var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
             request.StopLossItems.Clear();
 
             _engine.ProcessRequest(request);
@@ -159,7 +159,7 @@ namespace AutoSizeStrategy.Tests
                 .SetupGet(s => s.MissingStopLossAction)
                 .Returns(MissingStopLossAction.Ignore);
 
-            var request = CreateValidRequest(quantity: 10, stopDistancePoints: 5);
+            var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
             request.StopLossItems.Clear();
 
             _engine.ProcessRequest(request);
@@ -174,7 +174,7 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_AppendsTag_ToExistingComment()
         {
-            var request = CreateValidRequest(quantity: 10, stopDistancePoints: 5);
+            var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
 
             _engine.ProcessRequest(request);
 
@@ -260,7 +260,7 @@ namespace AutoSizeStrategy.Tests
         public void ProcessRequest_LogsEnforceInfo_WhenQuantityAdjusted()
         {
             // Quantity is 1 -> should be changed to 75 by the strategy
-            var request = CreateValidRequest(quantity: 1, stopDistancePoints: 10);
+            var request = CreateValidRequest(quantity: 1, stopDistanceTicks: 40);
 
             _engine.ProcessRequest(request);
 
@@ -291,13 +291,11 @@ namespace AutoSizeStrategy.Tests
 
         private PlaceOrderRequestParametersWrapper CreateValidRequest(
             double quantity,
-            double stopDistancePoints
+            double stopDistanceTicks
         )
         {
             double currentPrice = _symbolMock.Object.Last;
-            double stopPrice = currentPrice - stopDistancePoints;
-
-            var slTpHolder = SlTpHolder.CreateSL(stopPrice, PriceMeasurement.Absolute);
+            var slTpHolder = SlTpHolder.CreateSL(stopDistanceTicks, PriceMeasurement.Offset);
 
             return new PlaceOrderRequestParametersWrapper
             {

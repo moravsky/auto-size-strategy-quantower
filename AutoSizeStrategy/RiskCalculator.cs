@@ -1,4 +1,5 @@
 using System;
+using System.Timers;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
@@ -32,12 +33,12 @@ namespace AutoSizeStrategy
                 || double.IsInfinity(tickValue)
             )
             {
-                throw new ArgumentException("Input values must be finite numbers.");
+                throw new ArgumentException("Input values must be finite numbers");
             }
 
             if (riskCapital <= 0 || stopDistanceTicks <= 0 || tickValue <= 0)
             {
-                throw new ArgumentException("Input values must be greater than zero.");
+                throw new ArgumentException("Input values must be greater than zero");
             }
 
             // Calculate position size
@@ -55,11 +56,47 @@ namespace AutoSizeStrategy
             double tickValue
         )
         {
+            if (tickSize <= 0)
+            {
+                throw new ArgumentException("Tick size must be positive");
+            }
+
             // Calculate stop distance in ticks
-            double stopDistanceTicks = Math.Abs(entryPrice - stopPrice) / tickSize;
+            double stopDistanceTicks = Math.Round(
+                Math.Abs(entryPrice - stopPrice) / tickSize,
+                MidpointRounding.AwayFromZero
+            );
 
             // Calculate position size
             return CalculatePositionSize(riskCapital, stopDistanceTicks, tickValue);
+        }
+
+        public static double GetStopDistanceTicks(
+            SlTpHolder slTpHolder,
+            double tickSize,
+            double entryPrice
+        )
+        {
+            if (tickSize <= 0)
+            {
+                throw new ArgumentException("Tick size must be positive");
+            }
+
+            if (slTpHolder.PriceMeasurement == PriceMeasurement.Offset)
+            {
+                return slTpHolder.Price;
+            }
+            else if (slTpHolder.PriceMeasurement == PriceMeasurement.Absolute)
+            {
+                return Math.Round(
+                    Math.Abs(entryPrice - slTpHolder.Price) / tickSize,
+                    MidpointRounding.AwayFromZero
+                );
+            }
+            else
+            {
+                throw new ArgumentException("Price measurement must be Offset or Absolute");
+            }
         }
 
         /// Determines the amount of capital that can be risked based on the account balance
