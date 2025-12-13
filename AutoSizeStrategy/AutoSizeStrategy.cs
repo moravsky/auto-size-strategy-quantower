@@ -56,7 +56,6 @@ namespace AutoSizeStrategy
             catch (Exception ex)
             {
                 LogError($"CoreNewRequest failed: {ex}");
-                throw;
             }
         }
 
@@ -100,7 +99,6 @@ namespace AutoSizeStrategy
             catch (Exception ex)
             {
                 LogError($"OnOrderAdded failed for order {order.Id}: {ex}");
-                throw;
             }
         }
 
@@ -113,7 +111,6 @@ namespace AutoSizeStrategy
             catch (Exception ex)
             {
                 LogError($"OnOrderAdded failed for order {order.Id}: {ex}");
-                throw;
             }
         }
 
