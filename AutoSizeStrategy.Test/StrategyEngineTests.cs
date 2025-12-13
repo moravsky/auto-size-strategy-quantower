@@ -191,6 +191,37 @@ namespace AutoSizeStrategy.Tests
             // No changes expected – no exception must be thrown
         }
 
+        [Fact]
+        public void ProcessRequest_HydratesWrapperProperties_FromInnerSdkObject()
+        {
+            // Arrange
+            // 1. Create a "Raw" SDK parameter object (simulating what Quantower sends)
+            // We intentionally leave Account/Symbol null to test null-safety of the wrapper
+            var innerParams = new PlaceOrderRequestParameters { Quantity = 10, Price = 5000 };
+
+            // 2. Pass it through the Factory
+            var wrapper = (PlaceOrderRequestParametersWrapper)
+                RequestParametersWrapper.Create(innerParams);
+
+            // Act & Assert
+
+            // Test 1: Properties should NOT be null (Wrapped safely)
+            Assert.NotNull(wrapper.Account);
+            Assert.NotNull(wrapper.Symbol);
+
+            // Test 2: Types should be our Wrappers
+            Assert.IsType<AccountWrapper>(wrapper.Account);
+            Assert.IsType<SymbolWrapper>(wrapper.Symbol);
+
+            // Test 3: Data integrity
+            Assert.Equal(innerParams.RequestId, wrapper.RequestId);
+            Assert.Equal(5000, wrapper.Price);
+
+            // Test 4: Verify modifying the wrapper updates the inner SDK object
+            wrapper.Quantity = 50;
+            Assert.Equal(50, innerParams.Quantity);
+        }
+
         #endregion
 
         #region ProcessFailSafe -------------------------------------------

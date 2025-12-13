@@ -116,8 +116,8 @@ namespace AutoSizeStrategy
     public interface IPlaceOrderRequestParameters : IRequestParameters
     {
         double Quantity { get; set; }
-        IAccount Account { get; set; }
-        ISymbol Symbol { get; set; }
+        IAccount Account { get; }
+        ISymbol Symbol { get; }
         double Price { get; set; }
         List<SlTpHolder> StopLossItems { get; set; }
     }
@@ -139,9 +139,9 @@ namespace AutoSizeStrategy
             set => Inner.Quantity = value;
         }
 
-        public IAccount Account { get; set; } = default;
+        public IAccount Account { get; init; } = new AccountWrapper(inner.Account);
 
-        public ISymbol Symbol { get; set; } = default;
+        public ISymbol Symbol { get; init; } = new SymbolWrapper(inner.Symbol);
 
         public double Price
         {
