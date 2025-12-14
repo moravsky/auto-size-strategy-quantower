@@ -27,5 +27,15 @@ namespace AutoSizeStrategy.Test
             Assert.IsType<RequestParametersWrapper<RequestParameters>>(result);
             Assert.IsNotType<PlaceOrderRequestParametersWrapper>(result);
         }
+
+        [Fact]
+        public void Create_WithModifyOrderParams_ReturnsSpecificWrapper()
+        {
+            var sdkParams = new ModifyOrderRequestParameters();
+            var result = RequestParametersWrapper.Create(sdkParams);
+
+            Assert.IsType<ModifyOrderRequestParametersWrapper>(result);
+            Assert.NotNull(result as IModifyOrderRequestParameters);
+        }
     }
 }
