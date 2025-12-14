@@ -12,81 +12,57 @@ namespace AutoSizeStrategy
         void ReportCancelledOrder(string orderId);
     }
 
-    public class OrderKiller : IOrderKiller
+    public class OrderKiller(IStrategyLogger _logger) : IOrderKiller
     {
         private readonly CancellationTokenSource _cancellationTokenSource = new();
-        private readonly ConcurrentDictionary<string, DateTime> _pendingCancels = new();
+        private readonly TrackingSet<String> _pendingCancels = new();
         private readonly Random _random = new();
-        private const int LockCleanupPeriodMs = 5000;
-        private const int MaximumCancelAgeMs = 5000;
-        private const int MinCancelDelay = 567;
-        private const int MaxCancelDelay = 1234;
-        private readonly IStrategyLogger _logger;
-
-        public OrderKiller(IStrategyLogger logger)
-        {
-            _logger = logger;
-
-            // Free locks on the orders that are pending for a while
-            _ = Task.Run(async () =>
-            {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
-                {
-                    try
-                    {
-                        await Task.Delay(LockCleanupPeriodMs, _cancellationTokenSource.Token);
-                        var now = DateTime.UtcNow;
-
-                        foreach (var kvp in _pendingCancels)
-                        {
-                            // If a lock is older than 10 seconds, force remove it
-                            if ((now - kvp.Value).TotalMilliseconds > MaximumCancelAgeMs)
-                            {
-                                _pendingCancels.TryRemove(kvp.Key, out _);
-                                logger.LogInfo($"Force cleared stuck lock for {kvp.Key}");
-                            }
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-                }
-            });
-        }
+        private const int MinCancelDelayMs = 567;
+        private const int MaxCancelDelayMs = 1234;
 
         public void Kill(IOrder order)
         {
-            var task = Task.Run(async () =>
+            if (order.Status != OrderStatus.Opened)
+                return;
+
+            // atomic lock to avoid multiple threads trying to cancel the same order
+            if (!_pendingCancels.TryTrack(order.Id))
             {
-                if (order.Status != OrderStatus.Opened)
-                    return;
+                // Already pending cancellation, exit immediately.
+                return;
+            }
 
-                // atomic lock to avoid multiple threads trying to cancel the same order
-                if (!_pendingCancels.TryAdd(order.Id, DateTime.UtcNow))
+            _ = Task.Run(
+                async () =>
                 {
-                    // Already pending cancellation, exit immediately.
-                    return;
-                }
-
-                // TODO: V2: Add Gaussian noise to the delay?
-                // Introduce jitter to avoid overloading Rithmic API
-                await Task.Delay(_random.Next(MinCancelDelay, MaxCancelDelay));
-                try
-                {
-                    var tradingOperationResult = order.Cancel();
-                    if (tradingOperationResult.Status != TradingOperationResultStatus.Success)
+                    try
                     {
-                        _logger.LogError(
-                            $"Order {order.Id} cancelation failed: {tradingOperationResult.Message}"
+                        // TODO: V2: Add Gaussian noise to the delay?
+                        // Introduce jitter to avoid overloading Rithmic API
+                        await Task.Delay(
+                            _random.Next(MinCancelDelayMs, MaxCancelDelayMs),
+                            _cancellationTokenSource.Token
                         );
+
+                        var tradingOperationResult = order.Cancel();
+                        if (tradingOperationResult.Status != TradingOperationResultStatus.Success)
+                        {
+                            _logger.LogError(
+                                $"Order {order.Id} cancelation failed: {tradingOperationResult.Message}"
+                            );
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError($"Order {order.Id} cancelation failed: {ex.Message}");
-                }
-            });
+                    catch (OperationCanceledException ex)
+                    {
+                        _logger.LogInfo($"Order {order.Id} killer shutting down: {ex.Message}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"Order {order.Id} cancelation failed: {ex.Message}");
+                    }
+                },
+                _cancellationTokenSource.Token
+            );
         }
 
         public void ReportCancelledOrder(string orderId)

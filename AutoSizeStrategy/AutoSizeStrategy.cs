@@ -82,7 +82,12 @@ namespace AutoSizeStrategy
         {
             if (!_disposed && disposing)
             {
-                _shutdownCts.Cancel();
+                _disposed = true;
+
+                if (!_shutdownCts.IsCancellationRequested)
+                {
+                    _shutdownCts.Cancel();
+                }
                 _shutdownCts.Dispose();
 
                 Core.OrderAdded -= OnOrderAdded;
@@ -92,11 +97,13 @@ namespace AutoSizeStrategy
                 strategyEngine.Dispose();
                 base.Dispose();
             }
-            _disposed = true;
         }
 
         private async void OnOrderAdded(Order order)
         {
+            if (_disposed)
+                return;
+
             try
             {
                 var orderWrapper = new OrderWrapper(order);
@@ -113,6 +120,9 @@ namespace AutoSizeStrategy
 
         private async void CoreOrderRemoved(Order order)
         {
+            if (_disposed)
+                return;
+
             try
             {
                 await Task.Run(
