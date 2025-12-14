@@ -11,7 +11,7 @@ namespace AutoSizeStrategy
         private bool _disposed;
         private string _instanceId;
         private StrategyEngine strategyEngine;
-        private readonly CancellationTokenSource _shutdownCts = new();
+        private CancellationTokenSource _shutdownCts;
 
         [InputParameter("Risk Percent", minimum: 1.0, maximum: 100.0, increment: 1.0)]
         public double RiskPercent { get; set; } = 10.0;
@@ -34,8 +34,6 @@ namespace AutoSizeStrategy
             this.Name = "AutoSizeStrategy42";
             this.Description =
                 "Size orders for ALL symbols and accounts according to risk parameters.";
-            var context = new StrategyContext(this);
-            this.strategyEngine = new StrategyEngine(context);
         }
 
         protected override void OnCreated()
@@ -45,6 +43,10 @@ namespace AutoSizeStrategy
 
         protected override void OnRun()
         {
+            _shutdownCts = new CancellationTokenSource();
+            var context = new StrategyContext(this);
+            this.strategyEngine = new StrategyEngine(context);
+
             Core.OrderAdded += OnOrderAdded;
             Core.NewRequest += this.CoreNewRequest;
             Core.OrderRemoved += this.CoreOrderRemoved;
@@ -64,7 +66,18 @@ namespace AutoSizeStrategy
 
         protected override void OnStop()
         {
-            Dispose();
+            var cts = _shutdownCts;
+            if (cts == null)
+                return;
+            Core.OrderAdded -= OnOrderAdded;
+            Core.NewRequest -= this.CoreNewRequest;
+            Core.OrderRemoved -= this.CoreOrderRemoved;
+
+            _shutdownCts.Cancel();
+            _shutdownCts.Dispose();
+            _shutdownCts = null;
+            strategyEngine?.Dispose();
+            strategyEngine = null;
         }
 
         protected override void OnRemove()
@@ -84,33 +97,30 @@ namespace AutoSizeStrategy
             {
                 _disposed = true;
 
-                if (!_shutdownCts.IsCancellationRequested)
-                {
-                    _shutdownCts.Cancel();
-                }
-                _shutdownCts.Dispose();
-
-                Core.OrderAdded -= OnOrderAdded;
-                Core.NewRequest -= this.CoreNewRequest;
-                Core.OrderRemoved -= this.CoreOrderRemoved;
-
-                strategyEngine.Dispose();
+                OnStop();
                 base.Dispose();
             }
         }
 
         private async void OnOrderAdded(Order order)
         {
-            if (_disposed)
+            var cts = _shutdownCts;
+
+            if (_disposed || cts == null)
                 return;
 
             try
             {
                 var orderWrapper = new OrderWrapper(order);
-                await Task.Run(
-                    () => strategyEngine.ProcessFailSafe(orderWrapper),
-                    _shutdownCts.Token
-                );
+                await Task.Run(() => strategyEngine.ProcessFailSafe(orderWrapper), cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown - ignore
+            }
+            catch (ObjectDisposedException)
+            {
+                // Expected if cts was disposed mid-execution - ignore
             }
             catch (Exception ex)
             {
@@ -120,15 +130,21 @@ namespace AutoSizeStrategy
 
         private async void CoreOrderRemoved(Order order)
         {
-            if (_disposed)
+            var cts = _shutdownCts;
+            if (_disposed || cts == null)
                 return;
 
             try
             {
-                await Task.Run(
-                    () => strategyEngine.ReportOrderRemoved(order.Id),
-                    _shutdownCts.Token
-                );
+                await Task.Run(() => strategyEngine.ReportOrderRemoved(order.Id), cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown - ignore
+            }
+            catch (ObjectDisposedException)
+            {
+                // Expected if cts was disposed mid-execution - ignore
             }
             catch (Exception ex)
             {

@@ -44,6 +44,9 @@ namespace AutoSizeStrategy
                             _cancellationTokenSource.Token
                         );
 
+                        if (order.Status != OrderStatus.Opened)
+                            return;
+
                         var tradingOperationResult = order.Cancel();
                         if (tradingOperationResult.Status != TradingOperationResultStatus.Success)
                         {
