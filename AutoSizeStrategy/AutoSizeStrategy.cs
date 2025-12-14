@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
 using TradingPlatform.BusinessLayer.Utils;
 
@@ -9,6 +11,7 @@ namespace AutoSizeStrategy
         private bool _disposed;
         private string _instanceId;
         private StrategyEngine strategyEngine;
+        private readonly CancellationTokenSource _shutdownCts = new();
 
         [InputParameter("Risk Percent", minimum: 1.0, maximum: 100.0, increment: 1.0)]
         public double RiskPercent { get; set; } = 10.0;
@@ -79,6 +82,9 @@ namespace AutoSizeStrategy
         {
             if (!_disposed && disposing)
             {
+                _shutdownCts.Cancel();
+                _shutdownCts.Dispose();
+
                 Core.OrderAdded -= OnOrderAdded;
                 Core.NewRequest -= this.CoreNewRequest;
                 Core.OrderRemoved -= this.CoreOrderRemoved;
@@ -89,12 +95,15 @@ namespace AutoSizeStrategy
             _disposed = true;
         }
 
-        private void OnOrderAdded(Order order)
+        private async void OnOrderAdded(Order order)
         {
             try
             {
                 var orderWrapper = new OrderWrapper(order);
-                strategyEngine.ProcessFailSafe(orderWrapper);
+                await Task.Run(
+                    () => strategyEngine.ProcessFailSafe(orderWrapper),
+                    _shutdownCts.Token
+                );
             }
             catch (Exception ex)
             {
@@ -102,15 +111,18 @@ namespace AutoSizeStrategy
             }
         }
 
-        private void CoreOrderRemoved(Order order)
+        private async void CoreOrderRemoved(Order order)
         {
             try
             {
-                strategyEngine.ReportOrderRemoved(order.Id);
+                await Task.Run(
+                    () => strategyEngine.ReportOrderRemoved(order.Id),
+                    _shutdownCts.Token
+                );
             }
             catch (Exception ex)
             {
-                LogError($"OnOrderAdded failed for order {order.Id}: {ex}");
+                LogError($"CoreOrderRemoved failed for order {order.Id}: {ex}");
             }
         }
 
