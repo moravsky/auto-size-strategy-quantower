@@ -222,6 +222,64 @@ namespace AutoSizeStrategy.Tests
             Assert.Equal(50, innerParams.Quantity);
         }
 
+        [Fact]
+        public void ProcessRequest_Hydration_WrapsAndValidatesModifyOrder()
+        {
+            var sdkParams = new ModifyOrderRequestParameters
+            {
+                Quantity = 100, // Requesting 100
+                Price = 5000,
+            };
+
+            _settingsMock
+                .SetupGet(s => s.MissingStopLossAction)
+                .Returns(MissingStopLossAction.Reject);
+
+            _engine.ProcessRequest(sdkParams);
+
+            // The engine should have hydrated the wrapper, seen the empty StopLoss list, and set Qty to 0
+            Assert.Equal(0, sdkParams.Quantity);
+            // Price should remain unchanged
+            Assert.Equal(5000, sdkParams.Price);
+
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("cancelled: stop loss required"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public void ProcessRequest_ModifyOrder_CalculatesRiskCorrectly()
+        {
+            _accountMock.SetupGet(a => a.Id).Returns("TPPRO123456"); // Intraday account
+            var requestMock = new Mock<IModifyOrderRequestParameters>();
+
+            requestMock.SetupGet(r => r.RequestId).Returns(12345);
+            requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
+            requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
+            requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
+
+            var slList = new List<SlTpHolder> { SlTpHolder.CreateSL(20, PriceMeasurement.Offset) };
+            requestMock.SetupGet(r => r.StopLossItems).Returns(slList);
+
+            // Setup the "Requested" Quantity
+            // We use SetupProperty so the Engine can update it
+            requestMock.SetupProperty(r => r.Quantity, 100);
+
+            _engine.ProcessRequest(requestMock.Object);
+
+            // Balance 150k. Intraday Buffer 145.5k. Risk Cap $4,500.
+            // Risk 10% = $450.
+            // SL 20 ticks * $5/tick = $100 risk/contract.
+            // Expected Size = 4 contracts.
+            Assert.Equal(4, requestMock.Object.Quantity);
+
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Changed request"))),
+                Times.Once
+            );
+        }
+
         #endregion
 
         #region ProcessFailSafe -------------------------------------------

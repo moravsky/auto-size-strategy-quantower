@@ -31,47 +31,47 @@ namespace AutoSizeStrategy
 
         public void ProcessRequest(IRequestParameters requestParameters)
         {
-            if (requestParameters is not IPlaceOrderRequestParameters placeOrderRequestParameters)
+            if (requestParameters is not IOrderRequestParameters orderRequestParameters)
                 return;
 
             // Idempotency check
-            if (!_processedRequests.TryTrack(placeOrderRequestParameters.RequestId))
+            if (!_processedRequests.TryTrack(orderRequestParameters.RequestId))
             {
                 context.Logger.LogInfo(
-                    $"Order request {placeOrderRequestParameters.RequestId} has already been processed - passing through unchanged"
+                    $"Order request {orderRequestParameters.RequestId} has already been processed - passing through unchanged"
                 );
                 return;
             }
 
             // Check for stop loss
             if (
-                placeOrderRequestParameters.StopLossItems == null
-                || placeOrderRequestParameters.StopLossItems.Count == 0
+                orderRequestParameters.StopLossItems == null
+                || orderRequestParameters.StopLossItems.Count == 0
             )
             {
                 if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
                 {
                     context.Logger.LogInfo(
-                        $"Order request {placeOrderRequestParameters.RequestId} cancelled: stop loss required"
+                        $"Order request {orderRequestParameters.RequestId} cancelled: stop loss required"
                     );
-                    placeOrderRequestParameters.Quantity = 0;
+                    orderRequestParameters.Quantity = 0;
                     return;
                 }
                 else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
                 {
                     context.Logger.LogInfo(
-                        $"Order request {placeOrderRequestParameters.RequestId} has no stop loss - passing through unchanged"
+                        $"Order request {orderRequestParameters.RequestId} has no stop loss - passing through unchanged"
                     );
                     return;
                 }
             }
 
             // Infer drawdown mode
-            string accountId = placeOrderRequestParameters.Account.Id;
+            string accountId = orderRequestParameters.Account.Id;
             DrawdownMode drawdownMode = InferDrawdownMode(accountId);
 
             // Wrap account
-            var wrappedAccount = new AccountWrapper(placeOrderRequestParameters.Account);
+            var wrappedAccount = new AccountWrapper(orderRequestParameters.Account);
 
             // Calculate risk capital
             double riskCapital = RiskCalculator.CalculateRiskCapital(
@@ -81,13 +81,13 @@ namespace AutoSizeStrategy
             );
 
             // Get symbol data
-            var symbol = placeOrderRequestParameters.Symbol;
-            double entryPrice = placeOrderRequestParameters.Price;
+            var symbol = orderRequestParameters.Symbol;
+            double entryPrice = orderRequestParameters.Price;
             double tickSize = symbol.TickSize;
             double tickValue = symbol.GetTickCost(symbol.Last);
 
             // Caculate stop loss price
-            var slTpHolder = placeOrderRequestParameters.StopLossItems[0];
+            var slTpHolder = orderRequestParameters.StopLossItems[0];
             double stopDistanceTicks = RiskCalculator.GetStopDistanceTicks(
                 slTpHolder,
                 tickSize,
@@ -104,20 +104,18 @@ namespace AutoSizeStrategy
             if (calculatedSize == 0)
             {
                 context.Logger.LogInfo("Risk too small for 1 contract");
-                placeOrderRequestParameters.CancellationToken = new CancellationToken(
-                    canceled: true
-                );
+                orderRequestParameters.CancellationToken = new CancellationToken(canceled: true);
                 return;
             }
 
             // Set calculated size
-            if (placeOrderRequestParameters.Quantity != calculatedSize)
+            if (orderRequestParameters.Quantity != calculatedSize)
             {
                 context.Logger.LogInfo(
-                    $"Changed request {placeOrderRequestParameters.RequestId} quantity from {placeOrderRequestParameters.Quantity} to {calculatedSize}"
+                    $"Changed request {orderRequestParameters.RequestId} quantity from {orderRequestParameters.Quantity} to {calculatedSize}"
                 );
             }
-            placeOrderRequestParameters.Quantity = calculatedSize;
+            orderRequestParameters.Quantity = calculatedSize;
         }
 
         public void ReportOrderRemoved(string orderId)

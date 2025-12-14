@@ -26,10 +26,8 @@ namespace AutoSizeStrategy
 
         public double Price => order.Price;
 
-        public double TotalQuantity
-        {
-            get => order.TotalQuantity;
-        }
+        public double TotalQuantity => order.TotalQuantity;
+
         public OrderStatus Status => order.Status;
 
         public SlTpHolder[] StopLossItems => order.StopLossItems ?? [];
@@ -101,7 +99,7 @@ namespace AutoSizeStrategy
             return request switch
             {
                 PlaceOrderRequestParameters p => new PlaceOrderRequestParametersWrapper(p),
-                // TODO: Check if we need to handle ModifyOrderRequestParameters
+                ModifyOrderRequestParameters m => new ModifyOrderRequestParametersWrapper(m),
                 _ => new RequestParametersWrapper<RequestParameters>(request),
             };
         }
@@ -113,7 +111,7 @@ namespace AutoSizeStrategy
         public T Inner { get; } = inner;
     }
 
-    public interface IPlaceOrderRequestParameters : IRequestParameters
+    public interface IOrderRequestParameters : IRequestParameters
     {
         double Quantity { get; set; }
         IAccount Account { get; }
@@ -122,17 +120,14 @@ namespace AutoSizeStrategy
         List<SlTpHolder> StopLossItems { get; set; }
     }
 
-    public class PlaceOrderRequestParametersWrapper(PlaceOrderRequestParameters inner)
-        : RequestParametersWrapper<PlaceOrderRequestParameters>(inner),
-            IPlaceOrderRequestParameters
-    {
-        public PlaceOrderRequestParametersWrapper()
-            : this(new PlaceOrderRequestParameters())
-        {
-            Account = new AccountWrapper(Inner.Account);
-            Symbol = new SymbolWrapper(Inner.Symbol);
-        }
+    public interface IModifyOrderRequestParameters : IOrderRequestParameters { }
 
+    public interface IPlaceOrderRequestParameters : IOrderRequestParameters { }
+
+    public abstract class OrderRequestParametersWrapper(OrderRequestParameters inner)
+        : RequestParametersWrapper<OrderRequestParameters>(inner),
+            IOrderRequestParameters
+    {
         public double Quantity
         {
             get => Inner?.Quantity ?? default;
@@ -155,14 +150,35 @@ namespace AutoSizeStrategy
             get => Inner.StopLossItems ?? [];
             set
             {
+                // If the SDK list is null, we return safely to avoid the crash.
                 var sdkList = Inner.StopLossItems;
                 if (sdkList == null)
                     return;
 
                 sdkList.Clear();
                 if (value != null)
+                {
                     sdkList.AddRange(value);
+                }
             }
         }
+    }
+
+    public class PlaceOrderRequestParametersWrapper(PlaceOrderRequestParameters inner)
+        : OrderRequestParametersWrapper(inner),
+            IPlaceOrderRequestParameters
+    {
+        // Secondary constructor for tests/mocking
+        public PlaceOrderRequestParametersWrapper()
+            : this(new PlaceOrderRequestParameters()) { }
+    }
+
+    public class ModifyOrderRequestParametersWrapper(ModifyOrderRequestParameters inner)
+        : OrderRequestParametersWrapper(inner),
+            IModifyOrderRequestParameters
+    {
+        // Secondary constructor for tests/mocking
+        public ModifyOrderRequestParametersWrapper()
+            : this(new ModifyOrderRequestParameters()) { }
     }
 }
