@@ -43,6 +43,20 @@ namespace AutoSizeStrategy
                 return;
             }
 
+            // Check for Reduce-Only
+            double netPosition = context.GetNetPositionQuantity(
+                orderRequestParameters.Account,
+                orderRequestParameters.Symbol
+            );
+
+            if (orderRequestParameters.IsReduceOnly(netPosition))
+            {
+                context.Logger.LogInfo(
+                    $"Request {orderRequestParameters.RequestId} is Reduce-Only (NetPos: {netPosition}) - passing through unchanged."
+                );
+                return;
+            }
+
             // Check for stop loss
             if (
                 orderRequestParameters.StopLossItems == null
@@ -148,6 +162,16 @@ namespace AutoSizeStrategy
             // idempotency check
             if (!_processedOrders.TryTrack(order.Id))
                 return;
+
+            // Check for Reduce-Only
+            double netPosition = context.GetNetPositionQuantity(order.Account, order.Symbol);
+            if (order.IsReduceOnly(netPosition))
+            {
+                context.Logger.LogInfo(
+                    $"Order {order.Id} is Reduce-Only - passing through unchanged"
+                );
+                return;
+            }
 
             // Check for stop loss
             if (order.StopLossItems.Length == 0)
