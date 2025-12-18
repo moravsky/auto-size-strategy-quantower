@@ -139,6 +139,7 @@ namespace AutoSizeStrategy
         IAccount Account { get; }
         ISymbol Symbol { get; }
         double Price { get; set; }
+        Side Side { get; set; }
         List<SlTpHolder> StopLossItems { get; set; }
     }
 
@@ -164,6 +165,12 @@ namespace AutoSizeStrategy
         {
             get => Inner.Price;
             set => Inner.Price = value;
+        }
+
+        public Side Side
+        {
+            get => Inner.Side;
+            set => Inner.Side = value;
         }
 
         public List<SlTpHolder> StopLossItems
