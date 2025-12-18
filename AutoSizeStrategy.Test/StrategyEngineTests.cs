@@ -125,7 +125,7 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public void ProcessRequest_AddsTag_WhenCommentIsNull()
+        public void ProcessRequest_Resizes_Correctly()
         {
             _accountMock.SetupGet(a => a.Balance).Returns(2000.0);
             // Risk $200. Stop 5pts ($100/contract). Size = 2.
@@ -134,6 +134,24 @@ namespace AutoSizeStrategy.Tests
             _engine.ProcessRequest(request);
 
             Assert.Equal(2, request.Quantity); // enforced size
+        }
+
+        [Fact]
+        public void ProcessRequest_Cancels_NotEnoughForOneContact()
+        {
+            _accountMock.SetupGet(a => a.Balance).Returns(100.0);
+            // Risk $10. Stop 3pts ($15/contract). Size = 10/15 = 0.
+            var request = CreateValidRequest(quantity: 1, stopDistanceTicks: 15);
+
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(0, request.Quantity); // cancels the request
+
+            // Verify Log
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Risk too big"))),
+                Times.Once
+            );
         }
 
         [Fact]
@@ -224,16 +242,6 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public void ProcessRequest_AppendsTag_ToExistingComment()
-        {
-            var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
-
-            _engine.ProcessRequest(request);
-
-            Assert.Equal(150, request.Quantity);
-        }
-
-        [Fact]
         public void ProcessRequest_DoesNothing_WhenNotPlaceOrder()
         {
             var nonPlaceRequest = new SomeOtherRequestParameters(); // any non‑PlaceOrder type
@@ -241,6 +249,35 @@ namespace AutoSizeStrategy.Tests
             _engine.ProcessRequest(nonPlaceRequest);
 
             // No changes expected – no exception must be thrown
+        }
+
+        [Fact]
+        public void ProcessRequest_LogsEnforceInfo_WhenQuantityAdjusted()
+        {
+            // Quantity is 1 -> should be changed to 75 by the strategy
+            var request = CreateValidRequest(quantity: 1, stopDistanceTicks: 40);
+
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(75, request.Quantity);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(msg => msg.Contains("Changed request"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public void ProcessRequest_Logs_WhenRequestAlreadyProcessed()
+        {
+            var request = new PlaceOrderRequestParameters { Quantity = 0 };
+            _engine.ProcessRequest(request);
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(0, request.Quantity); // passed through size
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("passing through unchanged"))),
+                Times.Once
+            );
         }
 
         [Fact]
@@ -402,35 +439,6 @@ namespace AutoSizeStrategy.Tests
 
             // Should NOT call Kill
             _orderKillerMock.Verify(k => k.Kill(It.IsAny<IOrder>()), Times.Never);
-        }
-
-        [Fact]
-        public void ProcessRequest_LogsEnforceInfo_WhenQuantityAdjusted()
-        {
-            // Quantity is 1 -> should be changed to 75 by the strategy
-            var request = CreateValidRequest(quantity: 1, stopDistanceTicks: 40);
-
-            _engine.ProcessRequest(request);
-
-            Assert.Equal(75, request.Quantity);
-            _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(msg => msg.Contains("Changed request"))),
-                Times.Once
-            );
-        }
-
-        [Fact]
-        public void ProcessRequest_Logs_WhenRequestAlreadyProcessed()
-        {
-            var request = new PlaceOrderRequestParameters { Quantity = 0 };
-            _engine.ProcessRequest(request);
-            _engine.ProcessRequest(request);
-
-            Assert.Equal(0, request.Quantity); // passed through size
-            _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("passing through unchanged"))),
-                Times.Once
-            );
         }
 
         #endregion

@@ -8,9 +8,6 @@ namespace AutoSizeStrategy
     // TODO: Run StrategyEngine on a backgroud thread to unblock UI during debugging
     public partial class StrategyEngine(IStrategyContext context) : IDisposable
     {
-        [GeneratedRegex(@"\[RiskQty:((?s).)+\]", RegexOptions.Compiled)]
-        private static partial Regex TagRegex();
-
         [GeneratedRegex(@"TPPRO\d+", RegexOptions.Compiled)]
         private static partial Regex IntradayAccountPattern();
 
@@ -117,9 +114,7 @@ namespace AutoSizeStrategy
 
             if (calculatedSize == 0)
             {
-                context.Logger.LogInfo("Risk too small for 1 contract");
-                orderRequestParameters.CancellationToken = new CancellationToken(canceled: true);
-                return;
+                context.Logger.LogInfo("Risk too big even for 1 contract");
             }
 
             // Set calculated size
