@@ -32,6 +32,9 @@ namespace AutoSizeStrategy.Tests
             _contextMock.SetupGet(c => c.Logger).Returns(_loggerMock.Object);
             _contextMock.SetupGet(c => c.Settings).Returns(_settingsMock.Object);
             _contextMock.SetupGet(c => c.OrderKiller).Returns(_orderKillerMock.Object);
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(0);
 
             _settingsMock.SetupGet(s => s.RiskPercent).Returns(10.0);
             _settingsMock
@@ -134,6 +137,55 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
+        public void ProcessRequest_ReduceOnlyWrongSize_PassThrough()
+        {
+            // Simulate a Long Position of 10 contracts
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(10.0);
+
+            // Create a Sell Request (which is Reduce-Only for a Long position)
+            var request = CreateValidRequest(quantity: 3, stopDistanceTicks: 20);
+            request.Inner.Side = Side.Sell;
+
+            _engine.ProcessRequest(request);
+
+            // Quantity should remain 3, even though risk calc would resize it to 150
+            Assert.Equal(3, request.Quantity);
+
+            // Verify Log
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("is Reduce-Only"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public void ProcessRequest_ReduceOnlyNoStop_PassThrough()
+        {
+            // Simulate a Long Position of 10 contracts
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(10.0);
+
+            // Create a Sell Request (which is Reduce-Only for a Long position)
+            var request = CreateValidRequest(quantity: 150, stopDistanceTicks: 20);
+            request.Inner.Side = Side.Sell;
+            request.StopLossItems.Clear();
+
+            _engine.ProcessRequest(request);
+
+            // Quantity should remain 150, even though process request would set it to 0
+            Assert.Equal(150, request.Quantity);
+
+            // Verify Log
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("is Reduce-Only"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
         public void ProcessRequest_Cancels_WhenNoStopLossReject()
         {
             _settingsMock
@@ -194,30 +246,27 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_HydratesWrapperProperties_FromInnerSdkObject()
         {
-            // Arrange
-            // 1. Create a "Raw" SDK parameter object (simulating what Quantower sends)
+            // Create a "Raw" SDK parameter object (simulating what Quantower sends)
             // We intentionally leave Account/Symbol null to test null-safety of the wrapper
             var innerParams = new PlaceOrderRequestParameters { Quantity = 10, Price = 5000 };
 
-            // 2. Pass it through the Factory
+            // Pass it through the Factory
             var wrapper = (PlaceOrderRequestParametersWrapper)
                 RequestParametersWrapper.Create(innerParams);
 
-            // Act & Assert
-
-            // Test 1: Properties should NOT be null (Wrapped safely)
+            // Properties should NOT be null (Wrapped safely)
             Assert.NotNull(wrapper.Account);
             Assert.NotNull(wrapper.Symbol);
 
-            // Test 2: Types should be our Wrappers
+            // Types should be our Wrappers
             Assert.IsType<AccountWrapper>(wrapper.Account);
             Assert.IsType<SymbolWrapper>(wrapper.Symbol);
 
-            // Test 3: Data integrity
+            // Data integrity
             Assert.Equal(innerParams.RequestId, wrapper.RequestId);
             Assert.Equal(5000, wrapper.Price);
 
-            // Test 4: Verify modifying the wrapper updates the inner SDK object
+            // Verify modifying the wrapper updates the inner SDK object
             wrapper.Quantity = 50;
             Assert.Equal(50, innerParams.Quantity);
         }
@@ -312,6 +361,47 @@ namespace AutoSizeStrategy.Tests
 
             _loggerMock.VerifyNoOtherCalls();
             order.VerifyGet(o => o.Status, Times.AtLeastOnce);
+        }
+
+        [Fact]
+        public void ProcessFailSafe_ReduceOnlyWrongSize_PassThrough()
+        {
+            // Simulate a Short Position of -10 contracts
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(-10.0);
+
+            // Create a Buy Order (Reduce-Only for Short)
+            var order = CreateMockOrder("id_reduce", 5);
+            order.SetupGet(o => o.Side).Returns(Side.Buy);
+            // Simulate that the size is "wrong" according to risk to ensure it would be killed if not reduce-only
+            // (e.g. Risk calc might want 1 contract, but order is 5)
+
+            _engine.ProcessFailSafe(order.Object);
+
+            // Should NOT call Kill
+            _orderKillerMock.Verify(k => k.Kill(It.IsAny<IOrder>()), Times.Never);
+        }
+
+        [Fact]
+        public void ProcessFailSafe_ReduceOnlyNoStop_PassThrough()
+        {
+            // Simulate a Short Position of -10 contracts
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(-10.0);
+
+            // Create a Buy Order (Reduce-Only for Short)
+            var order = CreateMockOrder("id_reduce", 5);
+            order.SetupGet(o => o.Side).Returns(Side.Buy);
+            order.SetupGet(o => o.StopLossItems).Returns([]);
+            // Simulate that the size is "wrong" according to risk to ensure it would be killed if not reduce-only
+            // (e.g. Risk calc might want 1 contract, but order is 5)
+
+            _engine.ProcessFailSafe(order.Object);
+
+            // Should NOT call Kill
+            _orderKillerMock.Verify(k => k.Kill(It.IsAny<IOrder>()), Times.Never);
         }
 
         [Fact]
