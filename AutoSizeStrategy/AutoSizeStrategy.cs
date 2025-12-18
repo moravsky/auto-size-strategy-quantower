@@ -109,6 +109,7 @@ namespace AutoSizeStrategy
             if (_disposed || cts == null)
                 return;
 
+            // TODO: this is pretty complex and untestable (especially wrapping), consider moving to StrategyEngine
             try
             {
                 var orderWrapper = new OrderWrapper(order);
@@ -134,6 +135,7 @@ namespace AutoSizeStrategy
             if (_disposed || cts == null)
                 return;
 
+            // TODO: this is pretty complex and untestable, consider moving to StrategyEngine
             try
             {
                 await Task.Run(() => strategyEngine.ReportOrderRemoved(order.Id), cts.Token);
