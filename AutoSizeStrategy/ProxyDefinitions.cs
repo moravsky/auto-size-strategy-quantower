@@ -15,6 +15,7 @@ namespace AutoSizeStrategy
         OrderStatus Status { get; }
         SlTpHolder[] StopLossItems { get; }
         ISymbol Symbol { get; }
+        Side Side { get; }
         TradingOperationResult Cancel();
     }
 
@@ -33,6 +34,8 @@ namespace AutoSizeStrategy
         public SlTpHolder[] StopLossItems => order.StopLossItems ?? [];
 
         public ISymbol Symbol => new SymbolWrapper(order.Symbol);
+
+        public Side Side => order.Side;
 
         public TradingOperationResult Cancel() => order.Cancel();
     }
