@@ -6,6 +6,23 @@ using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
+    public interface IPosition
+    {
+        IAccount Account { get; }
+        ISymbol Symbol { get; }
+        Side Side { get; }
+        double Quantity { get; }
+    }
+
+    public class PositionWrapper(Position position) : IPosition
+    {
+        public IAccount Account => new AccountWrapper(position.Account);
+        public ISymbol Symbol => new SymbolWrapper(position.Symbol);
+
+        public Side Side => position.Side;
+        public double Quantity => position.Quantity;
+    }
+
     public interface IOrder
     {
         IAccount Account { get; }
@@ -60,6 +77,7 @@ namespace AutoSizeStrategy
 
     public interface ISymbol
     {
+        string Id { get; }
         double Last { get; }
         double TickSize { get; }
         double GetTickCost(double price);
@@ -67,6 +85,7 @@ namespace AutoSizeStrategy
 
     public class SymbolWrapper(Symbol symbol) : ISymbol
     {
+        public string Id => symbol.Id;
         public double TickSize => symbol.TickSize;
         public double Last => symbol.Last;
 
