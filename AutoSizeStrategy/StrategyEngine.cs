@@ -46,7 +46,7 @@ namespace AutoSizeStrategy
                 orderRequestParameters.Symbol
             );
 
-            if (orderRequestParameters.IsReduceOnly(netPosition))
+            if (orderRequestParameters.IsReduceOnlyForPosition(netPosition))
             {
                 context.Logger.LogInfo(
                     $"Request {orderRequestParameters.RequestId} is Reduce-Only (NetPos: {netPosition}) - passing through unchanged."
@@ -160,7 +160,7 @@ namespace AutoSizeStrategy
 
             // Check for Reduce-Only
             double netPosition = context.GetNetPositionQuantity(order.Account, order.Symbol);
-            if (order.IsReduceOnly(netPosition))
+            if (order.IsReduceOnlyForPosition(netPosition))
             {
                 context.Logger.LogInfo(
                     $"Order {order.Id} is Reduce-Only - passing through unchanged"
