@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
@@ -149,7 +150,7 @@ namespace AutoSizeStrategy
             // TODO: V2: Add UX override for drawdown mode
         }
 
-        public void ProcessFailSafe(IOrder order)
+        public async Task ProcessFailSafe(IOrder order)
         {
             if (order.Status != OrderStatus.Opened)
                 return;
@@ -158,21 +159,21 @@ namespace AutoSizeStrategy
             if (!_processedOrders.TryTrack(order.Id))
                 return;
 
-            // Check for Reduce-Only
-            double netPosition = context.GetNetPositionQuantity(order.Account, order.Symbol);
-            if (order.IsReduceOnlyForPosition(netPosition))
-            {
-                context.Logger.LogInfo(
-                    $"Order {order.Id} is Reduce-Only - passing through unchanged"
-                );
-                return;
-            }
-
             // Check for stop loss
             if (order.StopLossItems.Length == 0)
             {
                 if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
                 {
+                    // Check for Reduce-Only
+                    bool isReduceOnly = await order.IsReduceOnlyAsync(context);
+                    if (isReduceOnly)
+                    {
+                        context.Logger.LogInfo(
+                            $"Order {order.Id} is Reduce-Only - passing through unchanged"
+                        );
+                        return;
+                    }
+
                     context.Logger.LogInfo($"Cancelling order {order.Id}: missing stop loss");
                     context.OrderKiller.Kill(order);
                     return;

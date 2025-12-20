@@ -48,7 +48,7 @@ namespace AutoSizeStrategy.Tests
             // Default Symbol (MES-like)
             _symbolMock.SetupGet(s => s.TickSize).Returns(0.25);
             _symbolMock.SetupGet(s => s.Last).Returns(5000.0);
-            _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5.0); // $5/tick
+            _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5); // $5/tick
 
             _engine = new StrategyEngine(_contextMock.Object);
         }
@@ -371,14 +371,46 @@ namespace AutoSizeStrategy.Tests
         #region ProcessFailSafe -------------------------------------------
 
         [Fact]
-        public void ProcessFailSafe_Cancels_WhenQuantityMismatch()
+        public async Task ProcessFailSafe_EntryRightSize_PassThrough()
+        {
+            // Start with 20K balance
+            _accountMock.SetupGet(a => a.Balance).Returns(10_000.0);
+
+            // Create a Buy Order
+            // Risk budget = 1k. Risk = 1k / 5$ per tick (incorrect MES) / 20 ticks = 10 contracts
+            var order = CreateMockOrder("id1", 10);
+            order.SetupGet(o => o.Side).Returns(Side.Sell);
+            order
+                .SetupGet(o => o.StopLossItems)
+                .Returns([SlTpHolder.CreateSL(20, PriceMeasurement.Offset)]);
+
+            await _engine.ProcessFailSafe(order.Object);
+
+            // Should NOT call Kill
+            _orderKillerMock.Verify(k => k.Kill(It.IsAny<IOrder>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ProcessFailSafe_Cancels_WhenQuantityMismatch()
         {
             var order = CreateMockOrder(id: "456", qty: 5);
+            order
+                .SetupGet(o => o.StopLossItems)
+                .Returns([SlTpHolder.CreateSL(20, PriceMeasurement.Offset)]);
 
-            _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessFailSafe(order.Object);
 
+            // Correct size: 150K * 10% = 15K / 5$ per tick (incorrect MES) / 20 ticks = 150
+            var calculatedSize = 150;
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("Cancelling order"))),
+                l =>
+                    l.LogInfo(
+                        It.Is<string>(s =>
+                            s.Contains(
+                                $"Killing Order {order.Object.Id}. Size is {order.Object.TotalQuantity}, must be {calculatedSize}."
+                            )
+                        )
+                    ),
                 Times.Once
             );
             _orderKillerMock.Verify(
@@ -388,20 +420,20 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public void ProcessFailSafe_DoesNothing_WhenOrderClosed()
+        public async Task ProcessFailSafe_DoesNothing_WhenOrderClosed()
         {
             var order = new Mock<IOrder>();
             // Closed order – should skip
             order.SetupGet(o => o.Status).Returns(OrderStatus.Cancelled);
 
-            _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessFailSafe(order.Object);
 
             _loggerMock.VerifyNoOtherCalls();
             order.VerifyGet(o => o.Status, Times.AtLeastOnce);
         }
 
         [Fact]
-        public void ProcessFailSafe_ReduceOnlyWrongSize_PassThrough()
+        public async Task ProcessFailSafe_ReduceOnlyWrongSize_PassThrough()
         {
             // Simulate a Short Position of -10 contracts
             _contextMock
@@ -414,14 +446,14 @@ namespace AutoSizeStrategy.Tests
             // Simulate that the size is "wrong" according to risk to ensure it would be killed if not reduce-only
             // (e.g. Risk calc might want 1 contract, but order is 5)
 
-            _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessFailSafe(order.Object);
 
             // Should NOT call Kill
             _orderKillerMock.Verify(k => k.Kill(It.IsAny<IOrder>()), Times.Never);
         }
 
         [Fact]
-        public void ProcessFailSafe_ReduceOnlyNoStop_PassThrough()
+        public async Task ProcessFailSafe_ReduceOnlyNoStop_PassThrough()
         {
             // Simulate a Short Position of -10 contracts
             _contextMock
@@ -435,7 +467,7 @@ namespace AutoSizeStrategy.Tests
             // Simulate that the size is "wrong" according to risk to ensure it would be killed if not reduce-only
             // (e.g. Risk calc might want 1 contract, but order is 5)
 
-            _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessFailSafe(order.Object);
 
             // Should NOT call Kill
             _orderKillerMock.Verify(k => k.Kill(It.IsAny<IOrder>()), Times.Never);
@@ -463,9 +495,11 @@ namespace AutoSizeStrategy.Tests
             };
         }
 
-        private static Mock<IOrder> CreateMockOrder(string id, double qty)
+        private Mock<IOrder> CreateMockOrder(string id, double qty)
         {
             var order = new Mock<IOrder>();
+            order.SetupGet(o => o.Account).Returns(_accountMock.Object);
+            order.SetupGet(o => o.Symbol).Returns(_symbolMock.Object);
             order.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
             order.SetupGet(o => o.TotalQuantity).Returns(qty);
             order.SetupGet(o => o.Id).Returns(id);
