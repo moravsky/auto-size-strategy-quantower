@@ -110,6 +110,7 @@ namespace AutoSizeStrategy
                 return;
 
             // TODO: this is pretty complex and untestable (especially wrapping), consider moving to StrategyEngine
+            // TODO: filter out cancel orders somewhere
             try
             {
                 var orderWrapper = new OrderWrapper(order);

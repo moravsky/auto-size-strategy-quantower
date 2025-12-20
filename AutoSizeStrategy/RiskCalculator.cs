@@ -16,6 +16,7 @@ namespace AutoSizeStrategy
 
     public static class RiskCalculator
     {
+        // TODO: factor commisions and slippage into calculation
         /// Calculates the maximum position size based on the risk capital, stop distance, and tick value.
         public static int CalculatePositionSize(
             double riskCapital,

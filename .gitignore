@@ -1,6 +1,7 @@
 ﻿.vs/
 obj/
 bin/
+tmp/
 *.user
 *.suo
 *.cache
