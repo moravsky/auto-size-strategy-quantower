@@ -94,7 +94,7 @@ namespace AutoSizeStrategy
 
             // Get symbol data
             var symbol = orderRequestParameters.Symbol;
-            double entryPrice = orderRequestParameters.Price;
+            double entryPrice = orderRequestParameters.GetLikelyFillPrice();
             double tickSize = symbol.TickSize;
             double tickValue = symbol.GetTickCost(symbol.Last);
 
@@ -203,7 +203,7 @@ namespace AutoSizeStrategy
 
             // Get symbol data
             var symbol = order.Symbol;
-            double entryPrice = order.Price;
+            double entryPrice = order.GetLikelyFillPrice();
             double tickSize = symbol.TickSize;
             double tickValue = symbol.GetTickCost(symbol.Last);
 
@@ -222,6 +222,7 @@ namespace AutoSizeStrategy
                 tickValue
             );
 
+            // TODO: Allow undersized orders? UI option?
             if (Math.Abs(order.TotalQuantity - calculatedSize) > 0.001)
             {
                 context.Logger.LogInfo(

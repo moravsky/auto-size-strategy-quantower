@@ -344,6 +344,7 @@ namespace AutoSizeStrategy.Tests
             requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
             requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
             requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
+            requestMock.SetupGet(r => r.OrderTypeId).Returns(OrderType.Limit);
 
             var slList = new List<SlTpHolder> { SlTpHolder.CreateSL(20, PriceMeasurement.Offset) };
             requestMock.SetupGet(r => r.StopLossItems).Returns(slList);
@@ -492,6 +493,7 @@ namespace AutoSizeStrategy.Tests
                 Symbol = _symbolMock.Object,
                 Price = currentPrice,
                 StopLossItems = [slTpHolder],
+                OrderTypeId = OrderType.Limit,
             };
         }
 
@@ -503,6 +505,7 @@ namespace AutoSizeStrategy.Tests
             order.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
             order.SetupGet(o => o.TotalQuantity).Returns(qty);
             order.SetupGet(o => o.Id).Returns(id);
+            order.SetupGet(o => o.OrderTypeId).Returns(OrderType.Limit);
             return order;
         }
 

@@ -28,6 +28,8 @@ namespace AutoSizeStrategy
         IAccount Account { get; }
         string Id { get; }
         double Price { get; }
+        double TriggerPrice { get; }
+        string OrderTypeId { get; init; }
         double TotalQuantity { get; }
         OrderStatus Status { get; }
         SlTpHolder[] StopLossItems { get; }
@@ -43,6 +45,10 @@ namespace AutoSizeStrategy
         public string Id => order.Id;
 
         public double Price => order.Price;
+
+        public double TriggerPrice => order.TriggerPrice;
+
+        public string OrderTypeId { get; init; } = order.OrderTypeId;
 
         public double TotalQuantity => order.TotalQuantity;
 
@@ -141,6 +147,7 @@ namespace AutoSizeStrategy
         double Price { get; set; }
         Side Side { get; set; }
         List<SlTpHolder> StopLossItems { get; set; }
+        string OrderTypeId { get; init; }
     }
 
     public interface IModifyOrderRequestParameters : IOrderRequestParameters { }
@@ -191,6 +198,8 @@ namespace AutoSizeStrategy
                 }
             }
         }
+
+        public string OrderTypeId { get; init; } = inner.OrderTypeId;
     }
 
     public class PlaceOrderRequestParametersWrapper(PlaceOrderRequestParameters inner)

@@ -65,5 +65,30 @@ namespace AutoSizeStrategy
                 await Task.Delay(pollTime);
             }
         }
+
+        public static double GetLikelyFillPrice(
+            this IOrderRequestParameters orderRequestParameters
+        ) =>
+            orderRequestParameters.OrderTypeId switch
+            {
+                OrderType.Market => orderRequestParameters.Symbol.Last,
+                OrderType.Limit
+                or OrderType.StopLimit
+                or OrderType.LimitIfTouched
+                or OrderType.Stop
+                or OrderType.MarketIfTouched
+                or OrderType.TrailingStop => orderRequestParameters.Price,
+                _ => throw new NotSupportedException("Order type not supported"),
+            };
+
+        public static double GetLikelyFillPrice(this IOrder order) =>
+            order.OrderTypeId switch
+            {
+                OrderType.Market => order.Symbol.Last,
+                OrderType.Limit or OrderType.StopLimit or OrderType.LimitIfTouched => order.Price,
+                OrderType.Stop or OrderType.MarketIfTouched or OrderType.TrailingStop =>
+                    order.TriggerPrice,
+                _ => throw new NotSupportedException("Order type not supported"),
+            };
     }
 }
