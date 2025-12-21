@@ -54,18 +54,16 @@ namespace AutoSizeStrategy.Test
         }
 
         [Theory]
-        [InlineData(0, 20, 5)] // zero risk
-        [InlineData(-100, 20, 5)] // negative risk
         [InlineData(500, 0, 5)] // zero stop
         [InlineData(500, 20, 0)] // zero tick value
         public void CalculatePositionSize3_InvalidInputs_ThrowsArgumentException(
-            decimal risk,
-            decimal stop,
-            decimal tickVal
+            double riskCapital,
+            double stop,
+            double tickVal
         )
         {
             Assert.Throws<ArgumentException>(() =>
-                RiskCalculator.CalculatePositionSize((double)risk, (double)stop, (double)tickVal)
+                RiskCalculator.CalculatePositionSize(riskCapital, stop, tickVal)
             );
         }
 
@@ -142,10 +140,17 @@ namespace AutoSizeStrategy.Test
         #endregion
 
         #region CalculateRiskCapital
-        private static IAccount CreateAccount(double balance)
+        private static IAccount CreateAccount(
+            double balance,
+            Dictionary<string, string>? additionalInfo = null
+        )
         {
             var mock = new Mock<IAccount>();
             mock.SetupGet(a => a.Balance).Returns(balance);
+            if (additionalInfo != null)
+            {
+                mock.SetupGet(a => a.AdditionalInfo).Returns(additionalInfo);
+            }
             return mock.Object;
         }
 
@@ -153,50 +158,75 @@ namespace AutoSizeStrategy.Test
         public void CalculateRiskCapital_StaticMode_ReturnsCorrectCapital()
         {
             var account = CreateAccount(150_000);
+            string calculationReason = "";
             double riskCapital = RiskCalculator.CalculateRiskCapital(
                 account,
                 riskPercent: 1.0,
-                DrawdownMode.Static
+                DrawdownMode.Static,
+                out calculationReason
             );
 
             Assert.Equal(1500.0, riskCapital, precision: 4);
+            Assert.Contains("OK", calculationReason);
         }
 
         [Fact]
         public void CalculateRiskCapital_IntradayMode_WithStub_ReturnsExpectedCapital()
         {
-            var account = CreateAccount(150_000);
+            var account = CreateAccount(
+                150_000,
+                new Dictionary<string, string>
+                {
+                    { "AutoLiquidateThresholdCurrentValue", "145500" },
+                }
+            );
+            string calculationReason = "";
             double riskCapital = RiskCalculator.CalculateRiskCapital(
                 account,
                 riskPercent: 10.0,
-                DrawdownMode.Intraday
+                DrawdownMode.Intraday,
+                out calculationReason
             );
 
             Assert.Equal(450.0, riskCapital, precision: 4);
+            Assert.Contains("OK", calculationReason);
         }
 
         [Fact]
         public void CalculateRiskCapital_EndOfDayMode_WithStub_ReturnsExpectedCapital()
         {
-            var account = CreateAccount(150_000);
+            var account = CreateAccount(
+                150_000,
+                new Dictionary<string, string>
+                {
+                    { "AutoLiquidateThreshold", "4500" },
+                    { "MinAccountBalance", "145500" },
+                    { "NetPnL", "0" },
+                }
+            );
+            string calculationReason = "";
             double riskCapital = RiskCalculator.CalculateRiskCapital(
                 account,
                 riskPercent: 10.0,
-                DrawdownMode.EndOfDay
+                DrawdownMode.EndOfDay,
+                out calculationReason
             );
 
             /* Same stub as above – keep for future consistency test. */
             Assert.Equal(450.0, riskCapital, precision: 4);
+            Assert.Contains("OK", calculationReason);
         }
 
         [Fact]
         public void CalculateRiskCapital_NullAccount_ThrowsArgumentNullException()
         {
+            string calculationReason = "";
             Assert.Throws<ArgumentNullException>(() =>
                 RiskCalculator.CalculateRiskCapital(
                     account: null,
                     riskPercent: 1.0,
-                    DrawdownMode.Static
+                    DrawdownMode.Static,
+                    out calculationReason
                 )
             );
         }
@@ -207,11 +237,13 @@ namespace AutoSizeStrategy.Test
         public void CalculateRiskCapital_InvalidRiskPercent_ThrowsArgumentException(double percent)
         {
             var account = CreateAccount(150_000);
+            string calculationReason = "";
             Assert.Throws<ArgumentException>(() =>
                 RiskCalculator.CalculateRiskCapital(
                     account,
                     riskPercent: percent,
-                    DrawdownMode.Static
+                    DrawdownMode.Static,
+                    out calculationReason
                 )
             );
         }
@@ -220,11 +252,13 @@ namespace AutoSizeStrategy.Test
         public void CalculateRiskCapital_RiskPercent_Exceeds100_ThrowsArgumentException()
         {
             var account = CreateAccount(150_000);
+            string calculationReason = "";
             Assert.Throws<ArgumentException>(() =>
                 RiskCalculator.CalculateRiskCapital(
                     account,
                     riskPercent: 150.0,
-                    DrawdownMode.Static
+                    DrawdownMode.Static,
+                    out calculationReason
                 )
             );
         }

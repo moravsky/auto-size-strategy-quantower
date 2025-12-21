@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using TradingPlatform.BusinessLayer;
 
@@ -67,18 +68,53 @@ namespace AutoSizeStrategy
     {
         string Id { get; }
         double Balance { get; }
+        Dictionary<string, string> AdditionalInfo { get; }
+        string DumpAdditionalInfo();
     }
 
-    public class AccountWrapper(string id, double balance) : IAccount
+    public class AccountWrapper(Account account) : IAccount
     {
-        public AccountWrapper(Account account)
-            : this(id: account?.Id ?? default, balance: account?.Balance ?? default) { }
+        public AccountWrapper(IAccount wrapper)
+            : this((Account)null)
+        {
+            Id = wrapper?.Id ?? default;
+            Balance = wrapper?.Balance ?? default;
+        }
 
-        public AccountWrapper(IAccount account)
-            : this(id: account?.Id ?? default, balance: account?.Balance ?? default) { }
+        public string Id { get; } = account?.Id ?? default;
+        public double Balance { get; } = account?.Balance ?? default;
 
-        public string Id => id;
-        public double Balance => balance;
+        public Dictionary<string, string> AdditionalInfo
+        {
+            get
+            {
+                Dictionary<string, string> additionalInfo = new();
+
+                if (account?.AdditionalInfo?.Items == null)
+                    return additionalInfo;
+
+                foreach (var item in account.AdditionalInfo.Items)
+                {
+                    if (item?.Id != null)
+                    {
+                        // Safe string conversion
+                        additionalInfo[item.Id] = item.Value?.ToString() ?? string.Empty;
+                    }
+                }
+                return additionalInfo;
+            }
+        }
+
+        public string DumpAdditionalInfo()
+        {
+            if (account?.AdditionalInfo == null)
+                return "No AdditionalInfo";
+
+            var sb = new StringBuilder();
+            foreach (var item in account.AdditionalInfo.Items)
+                sb.AppendLine($"{item?.Id}: {item?.Value}");
+            return sb.ToString();
+        }
     }
 
     public interface ISymbol

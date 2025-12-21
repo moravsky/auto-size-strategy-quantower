@@ -24,7 +24,6 @@ namespace AutoSizeStrategy
             double tickValue
         )
         {
-            // Validate arguments
             if (
                 double.IsNaN(riskCapital)
                 || double.IsInfinity(riskCapital)
@@ -37,9 +36,23 @@ namespace AutoSizeStrategy
                 throw new ArgumentException("Input values must be finite numbers");
             }
 
-            if (riskCapital <= 0 || stopDistanceTicks <= 0 || tickValue <= 0)
+            // Could happen in a valid scenario
+            if (riskCapital <= 0)
             {
-                throw new ArgumentException("Input values must be greater than zero");
+                return 0;
+            }
+
+            // This is a configuration error if false (Impossible Instrument).
+            if (tickValue <= 0)
+            {
+                throw new ArgumentException("Tick value must be positive", nameof(tickValue));
+            }
+
+            // Stop distance must be positive to avoid Division by Zero.
+            // If stop is 0, logic is broken (Entry == Stop).
+            if (stopDistanceTicks <= 0)
+            {
+                throw new ArgumentException("Stop distance must be > 0", nameof(stopDistanceTicks));
             }
 
             // Calculate position size
@@ -57,9 +70,30 @@ namespace AutoSizeStrategy
             double tickValue
         )
         {
+            if (
+                double.IsNaN(riskCapital)
+                || double.IsInfinity(riskCapital)
+                || double.IsNaN(entryPrice)
+                || double.IsInfinity(entryPrice)
+                || double.IsNaN(stopPrice)
+                || double.IsInfinity(stopPrice)
+                || double.IsNaN(tickSize)
+                || double.IsInfinity(tickSize)
+                || double.IsNaN(tickValue)
+                || double.IsInfinity(tickValue)
+            )
+            {
+                throw new ArgumentException("Input values must be finite numbers");
+            }
+
             if (tickSize <= 0)
             {
                 throw new ArgumentException("Tick size must be positive");
+            }
+
+            if (tickValue <= 0)
+            {
+                throw new ArgumentException("Tick value must be positive");
             }
 
             // Calculate stop distance in ticks
@@ -82,6 +116,10 @@ namespace AutoSizeStrategy
             {
                 throw new ArgumentException("Tick size must be positive");
             }
+            if (double.IsNaN(entryPrice) || double.IsInfinity(entryPrice))
+            {
+                throw new ArgumentException("Input values must be finite numbers");
+            }
 
             if (slTpHolder.PriceMeasurement == PriceMeasurement.Offset)
             {
@@ -100,12 +138,13 @@ namespace AutoSizeStrategy
             }
         }
 
-        /// Determines the amount of capital that can be risked based on the account balance
-        /// and the selected drawdown mode, then applies the risk percentage.
+        /// Determines the amount of capital that can be risked based on the account balance,
+        /// previous EOD balance (for EOD accounts only)and the selected drawdown mode, then applies the risk percentage.
         public static double CalculateRiskCapital(
             IAccount account,
             double riskPercent,
-            DrawdownMode mode
+            DrawdownMode mode,
+            out string reason
         )
         {
             ArgumentNullException.ThrowIfNull(account);
@@ -116,17 +155,102 @@ namespace AutoSizeStrategy
                     nameof(riskPercent)
                 );
 
-            var availableDrawdown = mode switch
+            double availableDrawdown = 0;
+            reason = "";
+            switch (mode)
             {
-                DrawdownMode.Static => account.Balance,
-                DrawdownMode.Intraday or DrawdownMode.EndOfDay => account.Balance - 145_500, // Hard‑coded buffer for now – replace with real logic later.
-                _ => throw new ArgumentOutOfRangeException(
-                    nameof(mode),
-                    "Unsupported drawdown mode."
-                ),
-            };
+                case DrawdownMode.Static:
+                    availableDrawdown = account.Balance;
+                    break;
+                case DrawdownMode.Intraday:
+                    if (
+                        !TryGetInfoDouble(
+                            account,
+                            "AutoLiquidateThresholdCurrentValue",
+                            out double autoLiqCurrent
+                        )
+                    )
+                    {
+                        reason = "Missing 'AutoLiquidateThresholdCurrentValue' in Account Info";
+                        return 0; // FAIL SAFE
+                    }
+                    availableDrawdown = account.Balance - autoLiqCurrent;
+                    break;
+                case DrawdownMode.EndOfDay:
+                    if (
+                        !TryGetInfoDouble(
+                            account,
+                            "AutoLiquidateThreshold",
+                            out double drawdownSize
+                        )
+                    )
+                    {
+                        reason = "Missing 'AutoLiquidateThreshold' (Drawdown Size)";
+                        return 0;
+                    }
+                    if (!TryGetInfoDouble(account, "MinAccountBalance", out double minBalance))
+                    {
+                        reason = "Missing 'MinAccountBalance'";
+                        return 0;
+                    }
+                    if (!TryGetInfoDouble(account, "NetPnL", out double netPnl))
+                    {
+                        netPnl = 0;
+                    }
+                    // Risk budget is the lesser of:
+                    // 1. Distance to the hard floor (Balance - MinBalance)
+                    // 2. Daily Budget (DrawdownSize + NetPnL)
+                    availableDrawdown = Math.Min(
+                        account.Balance - minBalance,
+                        drawdownSize + netPnl
+                    );
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(
+                        nameof(mode),
+                        "Unsupported drawdown mode."
+                    );
+            }
+
+            if (availableDrawdown <= 0)
+            {
+                reason = $"Available drawdown is zero or negative ({availableDrawdown})";
+                return 0;
+            }
+
+            if (availableDrawdown > account.Balance)
+            {
+                // Edge case: Bad data shouldn't allow risking more than the entire account
+                availableDrawdown = account.Balance;
+                reason = "Drawdown capped at Account Balance (Calculation exceeded balance)";
+            }
+
             double riskCapital = availableDrawdown * (riskPercent / 100.0);
+            if (string.IsNullOrEmpty(reason))
+            {
+                reason = $"OK Drawdown: {availableDrawdown:F2}, Risk: {riskCapital:F2}";
+            }
             return riskCapital;
+        }
+
+        private static bool TryGetInfoDouble(IAccount account, string key, out double result)
+        {
+            result = 0;
+            if (
+                account.AdditionalInfo != null
+                && account.AdditionalInfo.TryGetValue(key, out var valStr)
+                && !string.IsNullOrWhiteSpace(valStr)
+            )
+            {
+                // InvariantCulture prevents issues if server sends "145.500" vs "145,500"
+                return double.TryParse(
+                    valStr,
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out result
+                );
+            }
+            return false;
         }
     }
 }

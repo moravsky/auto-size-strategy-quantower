@@ -13,7 +13,7 @@ namespace AutoSizeStrategy
         private StrategyEngine strategyEngine;
         private CancellationTokenSource _shutdownCts;
 
-        [InputParameter("Risk Percent", minimum: 1.0, maximum: 100.0, increment: 1.0)]
+        [InputParameter("Risk Percent", minimum: 1.0, maximum: 100.0, increment: 0.1)]
         public double RiskPercent { get; set; } = 10.0;
 
         [InputParameter(
