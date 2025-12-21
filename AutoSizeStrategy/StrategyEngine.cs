@@ -83,14 +83,24 @@ namespace AutoSizeStrategy
             DrawdownMode drawdownMode = InferDrawdownMode(accountId);
 
             // Wrap account
-            var wrappedAccount = new AccountWrapper(orderRequestParameters.Account);
+            var account = orderRequestParameters.Account;
 
             // Calculate risk capital
+            string calculationReason = "";
             double riskCapital = RiskCalculator.CalculateRiskCapital(
-                wrappedAccount,
+                account,
                 context.Settings.RiskPercent,
-                drawdownMode
+                drawdownMode,
+                out calculationReason
             );
+            if (riskCapital <= 0)
+            {
+                context.Logger.LogInfo($"Risk=0 for {account.Id}. Reason: {calculationReason}");
+                // If risk is 0, we can't trade.
+                // For Request: Set Qty to 0 (Cancel)
+                orderRequestParameters.Quantity = 0;
+                return;
+            }
 
             // Get symbol data
             var symbol = orderRequestParameters.Symbol;
@@ -191,15 +201,25 @@ namespace AutoSizeStrategy
             string accountId = order.Account.Id;
             DrawdownMode drawdownMode = InferDrawdownMode(accountId);
 
-            // Wrap account
-            var wrappedAccount = new AccountWrapper(order.Account);
+            var account = order.Account;
 
             // Calculate risk capital
+            string calculationReason = "";
             double riskCapital = RiskCalculator.CalculateRiskCapital(
-                wrappedAccount,
+                account,
                 context.Settings.RiskPercent,
-                drawdownMode
+                drawdownMode,
+                out calculationReason
             );
+            if (riskCapital <= 0)
+            {
+                context.Logger.LogInfo(
+                    $"Risk=0 for {account.Id}. Reason: {calculationReason}. Killing Order {order.Id}"
+                );
+                // If risk is 0, we can't trade.
+                context.OrderKiller.Kill(order);
+                return;
+            }
 
             // Get symbol data
             var symbol = order.Symbol;

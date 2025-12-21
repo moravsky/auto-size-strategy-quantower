@@ -56,14 +56,22 @@ namespace AutoSizeStrategy.Tests
         #region Drawdown Logic Tests (Intraday vs EOD vs Static) ----------------
 
         [Fact]
-        public void ProcessRequest_IntradayAccount_SubtractsBufferFromBalance()
+        public void ProcessRequest_Intraday_UsesALT()
         {
             _accountMock.SetupGet(a => a.Id).Returns("TPPRO123456");
 
             // Balance: 150,000
-            // Risk Budget = 150,000 - 145,500 (Hardcoded Buffer) = $4,500
+            // Risk Budget = 150,000 - 145,500 (AutoLiquidateThreshold) = $4,500
             // Risk (10%) = $450
             _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
+            _accountMock
+                .SetupGet(a => a.AdditionalInfo)
+                .Returns(
+                    new Dictionary<string, string>
+                    {
+                        { "AutoLiquidateThresholdCurrentValue", "145500" },
+                    }
+                );
 
             // Create Request with specific risk per contract
             // Stop: 5 pts = 20 ticks. Value: 20 ticks * $5 = $100 risk per contract.
@@ -83,6 +91,16 @@ namespace AutoSizeStrategy.Tests
             // Balance: 150,000
             // Risk budget = $4,500 -> Risk = $450
             _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
+            _accountMock
+                .SetupGet(a => a.AdditionalInfo)
+                .Returns(
+                    new Dictionary<string, string>
+                    {
+                        { "AutoLiquidateThreshold", "4500" },
+                        { "MinAccountBalance", "145500" },
+                        { "NetPnL", "0" },
+                    }
+                );
 
             // Same risk parameters ($100 risk per contract)
             var request = CreateValidRequest(quantity: 100, stopDistanceTicks: 20);
@@ -337,7 +355,7 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_ModifyOrder_CalculatesRiskCorrectly()
         {
-            _accountMock.SetupGet(a => a.Id).Returns("TPPRO123456"); // Intraday account
+            _accountMock.SetupGet(a => a.Id).Returns("Static"); // Intraday account
             var requestMock = new Mock<IModifyOrderRequestParameters>();
 
             requestMock.SetupGet(r => r.RequestId).Returns(12345);
@@ -355,11 +373,11 @@ namespace AutoSizeStrategy.Tests
 
             _engine.ProcessRequest(requestMock.Object);
 
-            // Balance 150k. Intraday Buffer 145.5k. Risk Cap $4,500.
-            // Risk 10% = $450.
+            // Balance 150k.
+            // Risk 10% = $15K.
             // SL 20 ticks * $5/tick = $100 risk/contract.
-            // Expected Size = 4 contracts.
-            Assert.Equal(4, requestMock.Object.Quantity);
+            // Expected Size = 150 contracts.
+            Assert.Equal(150, requestMock.Object.Quantity);
 
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(s => s.Contains("Changed request"))),

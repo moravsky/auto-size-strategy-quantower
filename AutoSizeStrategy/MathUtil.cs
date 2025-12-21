@@ -5,7 +5,7 @@ namespace AutoSizeStrategy
     public static class MathUtil
     {
         // Centralized constant: 1 billionth precision
-        // (Safe for Crypto 8 decimals and Futures)
+        // (Safe for Crypto and Futures: 8 decimals)
         public const double Epsilon = 1e-9;
 
         /// <summary>
