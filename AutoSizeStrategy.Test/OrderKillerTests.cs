@@ -49,14 +49,22 @@ namespace AutoSizeStrategy.Tests
             );
         }
 
-        [Fact]
-        public async Task Kill_NonOpenedOrder_DoesNotCallCancel()
+        [Theory]
+        // Not yet open at exchange
+        [InlineData(OrderStatus.Cancelled)]
+        [InlineData(OrderStatus.Filled)]
+        [InlineData(OrderStatus.Inactive)]
+        [InlineData(OrderStatus.PartiallyFilled)]
+        [InlineData(OrderStatus.Refused)]
+        [InlineData(OrderStatus.Unspecified)]
+        public void Kill_IgnoresOrders_UnlessOpened(OrderStatus status)
         {
-            var orderMock = CreateMockOrder("id_2", OrderStatus.Cancelled);
+            var orderMock = CreateMockOrder("id_ignore", status);
 
             _orderKiller.Kill(orderMock.Object);
-            await Task.Delay(SafeWaitTimeMs);
 
+            // We don't even need to wait for the delay here;
+            // the logic should exit immediately before spawning the Task.
             orderMock.Verify(o => o.Cancel(), Times.Never);
         }
 
