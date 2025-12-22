@@ -225,5 +225,66 @@ namespace AutoSizeStrategy.Tests
 
             Assert.Throws<NotSupportedException>(() => orderMock.Object.GetLikelyFillPrice());
         }
+
+        // A simple fake account for testing purposes
+        public record TestAccount(string Id, string Name = "Test");
+
+        [Fact]
+        public void FindTargetAccount_Prioritizes_Intraday_Over_EOD()
+        {
+            // Arrange
+            var accounts = new List<TestAccount>
+            {
+                new("TPT999"), // Priority 1 (EOD)
+                new("TPPRO123"), // Priority 0 (Intraday) - SHOULD WIN
+                new("Sim555"), // Priority 2 (Static)
+            };
+
+            // Act
+            // We use the generic method, telling it that 'Id' is the identifier
+            var result = accounts.FindTargetAccount();
+
+            // Assert
+            Assert.Equal("TPPRO123", result.Id);
+        }
+
+        [Fact]
+        public void FindTargetAccount_Prioritizes_EOD_Over_Static()
+        {
+            var accounts = new List<TestAccount>
+            {
+                new("SimABC"), // Priority 2
+                new("TPT888"), // Priority 1 - SHOULD WIN
+            };
+
+            var result = accounts.FindTargetAccount();
+
+            Assert.Equal("TPT888", result.Id);
+        }
+
+        [Fact]
+        public void FindTargetAccount_FallsBack_To_First_If_No_Matches()
+        {
+            var accounts = new List<TestAccount>
+            {
+                new("Personal1"), // Priority 2
+                new("Personal2"), // Priority 2
+            };
+
+            // MinBy is stable; it should pick the first one if ties exist
+            var result = accounts.FindTargetAccount();
+
+            Assert.Equal("Personal1", result.Id);
+        }
+
+        [Fact]
+        public void FindTargetAccount_Returns_Null_For_Empty_List()
+        {
+            var accounts = new List<TestAccount>();
+
+            var result = accounts.FindTargetAccount();
+
+            Assert.Null(result);
+        }
     }
 }

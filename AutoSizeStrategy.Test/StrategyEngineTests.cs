@@ -36,6 +36,7 @@ namespace AutoSizeStrategy.Tests
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(0);
 
+            _settingsMock.SetupGet(s => s.TargetAccount).Returns(_accountMock.Object);
             _settingsMock.SetupGet(s => s.RiskPercent).Returns(10.0);
             _settingsMock
                 .SetupGet(s => s.MissingStopLossAction)
@@ -151,7 +152,11 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_Sdk_PlaceOrderRequestParameters_WrappedCorrectly()
         {
-            var request = new PlaceOrderRequestParameters { Quantity = 2 };
+            var request = new PlaceOrderRequestParameters
+            {
+                AccountId = _accountMock.Object.Id,
+                Quantity = 2,
+            };
             _engine.ProcessRequest(request);
 
             Assert.Equal(0, request.Quantity); // set to 0 without SL
@@ -323,7 +328,12 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_Logs_WhenRequestAlreadyProcessed()
         {
-            var request = new PlaceOrderRequestParameters { Quantity = 0 };
+            var request = new PlaceOrderRequestParameters
+            {
+                AccountId = _accountMock.Object.Id,
+                Quantity = 0,
+            };
+
             _engine.ProcessRequest(request);
             _engine.ProcessRequest(request);
 
@@ -367,6 +377,7 @@ namespace AutoSizeStrategy.Tests
         {
             var sdkParams = new ModifyOrderRequestParameters
             {
+                AccountId = _accountMock.Object.Id,
                 Quantity = 100, // Requesting 100
                 Price = 5000,
             };
@@ -396,6 +407,7 @@ namespace AutoSizeStrategy.Tests
 
             requestMock.SetupGet(r => r.RequestId).Returns(12345);
             requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
+            requestMock.SetupGet(r => r.AccountId).Returns(_accountMock.Object.Id);
             requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
             requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
             requestMock.SetupGet(r => r.OrderTypeId).Returns(OrderType.Limit);
@@ -544,6 +556,7 @@ namespace AutoSizeStrategy.Tests
             {
                 Quantity = quantity,
                 Account = _accountMock.Object,
+                AccountId = _accountMock.Object.Id,
                 Symbol = _symbolMock.Object,
                 Price = currentPrice,
                 StopLossItems = [slTpHolder],

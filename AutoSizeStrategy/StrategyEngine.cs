@@ -9,11 +9,11 @@ namespace AutoSizeStrategy
     // TODO: Run StrategyEngine on a backgroud thread to unblock UI during debugging
     public partial class StrategyEngine(IStrategyContext context) : IDisposable
     {
-        [GeneratedRegex(@"TPPRO\d+", RegexOptions.Compiled)]
-        private static partial Regex IntradayAccountPattern();
+        [GeneratedRegex(@"TPPRO\d+")]
+        public static partial Regex IntradayAccountPattern();
 
-        [GeneratedRegex(@"TPT\d+", RegexOptions.Compiled)]
-        private static partial Regex EndOfDayAccountPattern();
+        [GeneratedRegex(@"TPT\d+")]
+        public static partial Regex EndOfDayAccountPattern();
 
         private readonly TrackingSet<long> _processedRequests = new();
         private readonly TrackingSet<string> _processedOrders = new();
@@ -31,6 +31,18 @@ namespace AutoSizeStrategy
         {
             if (requestParameters is not IOrderRequestParameters orderRequestParameters)
                 return;
+
+            if (context.Settings.TargetAccount == null)
+            {
+                context.Logger.LogError($"Target account not set, cannot continue");
+                return;
+            }
+
+            // Check account filter
+            if (context.Settings.TargetAccount.Id != orderRequestParameters.AccountId)
+            {
+                return;
+            }
 
             // Idempotency check
             if (!_processedRequests.TryTrack(orderRequestParameters.RequestId))
@@ -164,6 +176,18 @@ namespace AutoSizeStrategy
         {
             if (order.Status != OrderStatus.Opened)
                 return;
+
+            if (context.Settings.TargetAccount == null)
+            {
+                context.Logger.LogError($"Target account not set, cannot continue");
+                return;
+            }
+
+            // Check account filter
+            if (context.Settings.TargetAccount.Id != order.Account.Id)
+            {
+                return;
+            }
 
             // idempotency check
             if (!_processedOrders.TryTrack(order.Id))

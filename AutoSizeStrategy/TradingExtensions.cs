@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
 
@@ -90,5 +92,31 @@ namespace AutoSizeStrategy
                     order.TriggerPrice,
                 _ => throw new NotSupportedException("Order type not supported"),
             };
+
+        // This accepts ANY object T, as long as it can find the 'id'.
+        // We need this, because we cannot create SDK Account type.
+        public static T FindTargetAccount<T>(this IEnumerable<T> accounts)
+        {
+            if (accounts == null || !accounts.Any())
+                return default;
+
+            return accounts.MinBy(item =>
+            {
+                // DUCK TYPING (The "C++ Template" Style)
+                // We assume 'item' has a public property named 'Id'.
+                // If it doesn't, this crashes (but only if Quantower removes Id from Account).
+                dynamic d = item;
+                var id = d.Id;
+                return id switch
+                {
+                    // Priority 0: TPT PRO Intraday
+                    var _ when StrategyEngine.IntradayAccountPattern().IsMatch(id) => 0,
+                    // Priority 1: TPT Eval EOD
+                    var _ when StrategyEngine.EndOfDayAccountPattern().IsMatch(id) => 1,
+                    // Priority 2: Everything else
+                    _ => 2,
+                };
+            });
+        }
     }
 }
