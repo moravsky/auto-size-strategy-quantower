@@ -14,6 +14,15 @@ namespace AutoSizeStrategy
         Static,
     }
 
+    /* * CAUTIONARY TALE: THE $104 MILLION PENNY
+    * On April 20, 2020, Oil futures went to -$37.63.
+    * Interactive Brokers' software assumed prices couldn't go below zero
+    * and displayed the price as $0.01.
+    * * Result: Users bought the "dip" at negative prices, yet the prices kept going lower.
+    * * The liquidation engine failed to trigger, and IBKR lost ~$104 million covering client debts.
+    * * LESSON: NEVER assume values (Prices, Balances, Risk) are always positive.
+    * Always validate inputs and handle "impossible" edge cases.
+    */
     public static class RiskCalculator
     {
         // TODO: factor commisions and slippage into calculation
@@ -139,7 +148,7 @@ namespace AutoSizeStrategy
         }
 
         /// Determines the amount of capital that can be risked based on the account balance,
-        /// previous EOD balance (for EOD accounts only)and the selected drawdown mode, then applies the risk percentage.
+        /// previous EOD balance (for EOD accounts only) and the selected drawdown mode, then applies the risk percentage.
         public static double CalculateRiskCapital(
             IAccount account,
             double riskPercent,
@@ -195,6 +204,7 @@ namespace AutoSizeStrategy
                     }
                     if (!TryGetInfoDouble(account, "NetPnL", out double netPnl))
                     {
+                        reason = "Missing 'NetPnL' from the broker, assume it's 0";
                         netPnl = 0;
                     }
                     // Risk budget is the lesser of:

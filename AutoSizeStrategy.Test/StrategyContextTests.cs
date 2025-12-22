@@ -9,7 +9,6 @@ namespace AutoSizeStrategy.Tests
 {
     public class StrategyContextTests
     {
-        // No more Mock<AutoSizeStrategy>!
         private readonly Mock<IStrategyLogger> _loggerMock;
         private readonly Mock<IStrategySettings> _settingsMock;
         private readonly Mock<IOrderKiller> _killerMock;
@@ -30,6 +29,76 @@ namespace AutoSizeStrategy.Tests
             _symbolMock.SetupGet(s => s.Id).Returns("Sym1");
         }
 
+        public static TheoryData<
+            string,
+            string,
+            List<(string Acc, string Sym, Side Side, double Qty)>,
+            double
+        > NetPositionScenarios
+        {
+            get
+            {
+                var data =
+                    new TheoryData<
+                        string,
+                        string,
+                        List<(string Acc, string Sym, Side Side, double Qty)>,
+                        double
+                    >();
+
+                // 1. SIMPLE LONG
+                data.Add("Acc1", "ES", new() { ("Acc1", "ES", Side.Buy, 5) }, 5);
+
+                // 2. SIMPLE SHORT
+                data.Add("Acc1", "ES", new() { ("Acc1", "ES", Side.Sell, 5) }, -5);
+
+                // 3. FLATTENED (Real World)
+                // If I buy 5 and sell 5, the position list is EMPTY.
+                data.Add("Acc1", "ES", new() { }, 0);
+
+                // 4. SCALED IN (Real World)
+                // If I buy 5, then buy 5, the platform gives me ONE position of 10.
+                data.Add("Acc1", "ES", new() { ("Acc1", "ES", Side.Buy, 10) }, 10);
+
+                // 5. IGNORES OTHER SYMBOLS
+                data.Add("Acc1", "ES", new() { ("Acc1", "NQ", Side.Buy, 100) }, 0);
+
+                // 6. IGNORES OTHER ACCOUNTS
+                data.Add("Acc1", "ES", new() { ("Acc2", "ES", Side.Buy, 100) }, 0);
+
+                return data;
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(NetPositionScenarios))]
+        public void GetNetPositionQuantity_CalculatesCorrectly(
+            string targetAcc,
+            string targetSym,
+            List<(string Acc, string Sym, Side Side, double Qty)> positions,
+            double expectedNet
+        )
+        {
+            // Arrange
+            var positionMocks = new List<IPosition>();
+            foreach (var p in positions)
+            {
+                positionMocks.Add(CreateMockPosition(p.Acc, p.Sym, p.Side, p.Qty).Object);
+            }
+
+            var context = CreateContext(positionMocks);
+            var accMock = new Mock<IAccount>();
+            accMock.SetupGet(a => a.Id).Returns(targetAcc);
+            var symMock = new Mock<ISymbol>();
+            symMock.SetupGet(s => s.Id).Returns(targetSym);
+
+            // Act
+            double result = context.GetNetPositionQuantity(accMock.Object, symMock.Object);
+
+            // Assert
+            Assert.Equal(expectedNet, result);
+        }
+
         private StrategyContext CreateContext(List<IPosition> positions)
         {
             // We use the PRIMARY constructor which is pure and testable
@@ -39,47 +108,6 @@ namespace AutoSizeStrategy.Tests
                 _killerMock.Object,
                 () => positions
             );
-        }
-
-        [Fact]
-        public void GetNetPosition_NoPositions_ReturnsZero()
-        {
-            var context = CreateContext(new List<IPosition>());
-            double result = context.GetNetPositionQuantity(_accountMock.Object, _symbolMock.Object);
-            Assert.Equal(0, result);
-        }
-
-        [Fact]
-        public void GetNetPosition_LongPosition_ReturnsPositiveQuantity()
-        {
-            var pos = CreateMockPosition("Acc1", "Sym1", Side.Buy, 10);
-            var context = CreateContext(new List<IPosition> { pos.Object });
-
-            double result = context.GetNetPositionQuantity(_accountMock.Object, _symbolMock.Object);
-
-            Assert.Equal(10, result);
-        }
-
-        [Fact]
-        public void GetNetPosition_ShortPosition_ReturnsNegativeQuantity()
-        {
-            var pos = CreateMockPosition("Acc1", "Sym1", Side.Sell, 5);
-            var context = CreateContext(new List<IPosition> { pos.Object });
-
-            double result = context.GetNetPositionQuantity(_accountMock.Object, _symbolMock.Object);
-
-            Assert.Equal(-5, result);
-        }
-
-        [Fact]
-        public void GetNetPosition_IgnoresDifferentAccount()
-        {
-            var pos = CreateMockPosition("Acc2", "Sym1", Side.Buy, 100);
-            var context = CreateContext(new List<IPosition> { pos.Object });
-
-            double result = context.GetNetPositionQuantity(_accountMock.Object, _symbolMock.Object);
-
-            Assert.Equal(0, result);
         }
 
         private Mock<IPosition> CreateMockPosition(

@@ -53,84 +53,99 @@ namespace AutoSizeStrategy.Tests
             _engine = new StrategyEngine(_contextMock.Object);
         }
 
-        #region Drawdown Logic Tests (Intraday vs EOD vs Static) ----------------
+        #region Drawdown Logic Tests (Intraday vs EOD vs Static)
 
-        [Fact]
-        public void ProcessRequest_Intraday_UsesALT()
+        public static TheoryData<
+            string,
+            double,
+            Dictionary<string, string>,
+            double
+        > DrawdownScenarios
         {
-            _accountMock.SetupGet(a => a.Id).Returns("TPPRO123456");
+            get
+            {
+                var data = new TheoryData<string, double, Dictionary<string, string>, double>();
 
-            // Balance: 150,000
-            // Risk Budget = 150,000 - 145,500 (AutoLiquidateThreshold) = $4,500
-            // Risk (10%) = $450
-            _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
-            _accountMock
-                .SetupGet(a => a.AdditionalInfo)
-                .Returns(
+                // INTRADAY SCENARIO (TPPRO)
+                // Uses 'AutoLiquidateThresholdCurrentValue' to calculate risk.
+                data.Add(
+                    "TPPRO123456", // accountId: Matches Intraday Regex
+                    150_000, // balance: Current Account Balance
                     new Dictionary<string, string>
                     {
+                        // The trailing drawdown level (High Water Mark - Drawdown Limit)
                         { "AutoLiquidateThresholdCurrentValue", "145500" },
-                    }
+                    },
+                    4 // expectedQty: (150k - 145.5k) = $4,500 Risk Budget.
+                // 10% = $450. Stop $100/contract. Result = 4.
                 );
 
-            // Create Request with specific risk per contract
-            // Stop: 5 pts = 20 ticks. Value: 20 ticks * $5 = $100 risk per contract.
-            // Expected Qty: $450 / $100 = 4.5 -> Round down to 4.
-            var request = CreateValidRequest(quantity: 100, stopDistanceTicks: 20);
-
-            _engine.ProcessRequest(request);
-
-            Assert.Equal(4, request.Quantity);
-        }
-
-        [Fact]
-        public void ProcessRequest_EODAccount_SubtractsBufferFromBalance()
-        {
-            _accountMock.SetupGet(a => a.Id).Returns("TPT987654");
-
-            // Balance: 150,000
-            // Risk budget = $4,500 -> Risk = $450
-            _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
-            _accountMock
-                .SetupGet(a => a.AdditionalInfo)
-                .Returns(
+                // END OF DAY SCENARIO (TPT)
+                // Uses 'AutoLiquidateThreshold', 'MinAccountBalance', and 'NetPnL'.
+                data.Add(
+                    "TPT987654", // accountId: Matches EOD Regex
+                    150_000, // balance
                     new Dictionary<string, string>
                     {
-                        { "AutoLiquidateThreshold", "4500" },
-                        { "MinAccountBalance", "145500" },
-                        { "NetPnL", "0" },
-                    }
+                        { "AutoLiquidateThreshold", "4500" }, // Static Drawdown Size
+                        { "MinAccountBalance", "145500" }, // The Hard Floor
+                        { "NetPnL", "0" }, // Today's PnL
+                    },
+                    4 // expectedQty: Same math as above, but derived differently.
                 );
 
-            // Same risk parameters ($100 risk per contract)
-            var request = CreateValidRequest(quantity: 100, stopDistanceTicks: 20);
+                // STATIC SCENARIO (Personal/Sim)
+                // No Thresholds provided. Uses raw Balance.
+                data.Add(
+                    "SimPersonal", // accountId: Matches NO Regex -> Static Mode
+                    150_000, // balance
+                    new Dictionary<string, string>(), // No Additional Info needed
+                    150 // expectedQty: Risk 10% of 150k = $15,000.
+                // Stop $100/contract. Result = 150.
+                );
 
-            _engine.ProcessRequest(request);
+                // EDGE CASE: TIGHT TRAILING STOP
+                // Demonstrates what happens when the trailing stop is very close to balance.
+                data.Add(
+                    "TPPRO149900",
+                    150_000,
+                    new Dictionary<string, string>
+                    {
+                        { "AutoLiquidateThresholdCurrentValue", "149900" },
+                    },
+                    0 // expectedQty: Room is only $100. Risk 10% = $10.
+                // Stop is $100. $10 / $100 = 0.1 -> Rounds to 0.
+                );
 
-            Assert.Equal(4, request.Quantity);
+                return data;
+            }
         }
 
-        [Fact]
-        public void ProcessRequest_StaticAccount_UsesFullBalance()
+        [Theory]
+        [MemberData(nameof(DrawdownScenarios))]
+        public void ProcessRequest_InfersMode_AndCalculatesCorrectly(
+            string accountId,
+            double balance,
+            Dictionary<string, string> additionalInfo,
+            double expectedQty
+        )
         {
-            _accountMock.SetupGet(a => a.Id).Returns("SimPersonalAccount");
+            // Arrange
+            _accountMock.SetupGet(a => a.Id).Returns(accountId);
+            _accountMock.SetupGet(a => a.Balance).Returns(balance);
+            _accountMock.SetupGet(a => a.AdditionalInfo).Returns(additionalInfo);
 
-            // Balance: 150,000
-            // Risk budget = $150,000 (No buffer subtraction)
-            // Risk (10%) = $15,000
-            _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
-
-            // 3. Same risk parameters ($100 risk per contract)
-            // Expected Qty: $15,000 / $100 = 150.
+            // Stop: 5 pts = 20 ticks. Value: 20 ticks * $5 = $100 risk per contract.
             var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
 
+            // Act
             _engine.ProcessRequest(request);
 
-            Assert.Equal(150, request.Quantity);
+            // Assert
+            Assert.Equal(expectedQty, request.Quantity);
         }
 
         #endregion
-
         #region ProcessRequest ---------------------------------------------
 
         [Fact]
@@ -255,6 +270,27 @@ namespace AutoSizeStrategy.Tests
             Assert.Equal(10, request.Quantity);
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(s => s.Contains("passing through unchanged"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public void ProcessRequest_HugeStopLoss_ResultsInZeroQuantity()
+        {
+            _accountMock.SetupGet(a => a.Id).Returns("PersonalAccount");
+            _accountMock.SetupGet(a => a.Balance).Returns(10_000); // Risk 10% = $1,000
+
+            // User sets a massive stop loss (e.g., 500 points on ES = 2000 ticks)
+            // 2000 ticks * $5 = $10,000 risk per contract.
+            // Budget is only $1,000.
+            // Result: 0.1 contracts -> 0.
+            var request = CreateValidRequest(quantity: 1, stopDistanceTicks: 2000);
+
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(0, request.Quantity);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Risk too big"))),
                 Times.Once
             );
         }
