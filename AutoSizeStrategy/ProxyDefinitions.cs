@@ -179,6 +179,7 @@ namespace AutoSizeStrategy
     {
         double Quantity { get; set; }
         IAccount Account { get; }
+        string AccountId { get; }
         ISymbol Symbol { get; }
         double Price { get; set; }
         Side Side { get; set; }
@@ -201,6 +202,8 @@ namespace AutoSizeStrategy
         }
 
         public IAccount Account { get; init; } = new AccountWrapper(inner.Account);
+
+        public string AccountId { get; init; } = inner.AccountId;
 
         public ISymbol Symbol { get; init; } = new SymbolWrapper(inner.Symbol);
 

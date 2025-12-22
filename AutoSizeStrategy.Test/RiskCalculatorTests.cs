@@ -345,7 +345,7 @@ namespace AutoSizeStrategy.Test
             // Should behave like PnL is 0.
             // Risk = 10% of 4500 = 450.
             Assert.Equal(450.0, riskCapital);
-            Assert.Contains("OK", reason);
+            Assert.Contains("Missing 'NetPnL'", reason);
         }
 
         [Fact]

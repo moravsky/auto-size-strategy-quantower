@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
@@ -12,6 +13,12 @@ namespace AutoSizeStrategy
         private string _instanceId;
         private StrategyEngine strategyEngine;
         private CancellationTokenSource _shutdownCts;
+
+        [InputParameter("Target Account")]
+        public Account TargetAccount = Core.Accounts.FindTargetAccount();
+
+        IAccount IStrategySettings.TargetAccount =>
+            TargetAccount != null ? new AccountWrapper(TargetAccount) : null;
 
         [InputParameter("Risk Percent", minimum: 1.0, maximum: 100.0, increment: 0.1)]
         public double RiskPercent { get; set; } = 10.0;
@@ -43,6 +50,12 @@ namespace AutoSizeStrategy
 
         protected override void OnRun()
         {
+            if (TargetAccount == null)
+            {
+                LogError("No target account configured - strategy cannot run");
+                return;
+            }
+
             _shutdownCts = new CancellationTokenSource();
             var context = new StrategyContext(this);
             this.strategyEngine = new StrategyEngine(context);
