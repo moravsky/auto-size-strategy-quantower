@@ -11,7 +11,7 @@ namespace AutoSizeStrategy.Tests
     {
         private readonly Mock<IStrategyLogger> _loggerMock;
         private readonly Mock<IStrategySettings> _settingsMock;
-        private readonly Mock<IOrderKiller> _killerMock;
+        private readonly Mock<ITradingService> _serviceMock;
 
         private readonly Mock<IAccount> _accountMock;
         private readonly Mock<ISymbol> _symbolMock;
@@ -20,7 +20,7 @@ namespace AutoSizeStrategy.Tests
         {
             _loggerMock = new Mock<IStrategyLogger>();
             _settingsMock = new Mock<IStrategySettings>();
-            _killerMock = new Mock<IOrderKiller>();
+            _serviceMock = new Mock<ITradingService>();
 
             _accountMock = new Mock<IAccount>();
             _symbolMock = new Mock<ISymbol>();
@@ -105,7 +105,7 @@ namespace AutoSizeStrategy.Tests
             return new StrategyContext(
                 _loggerMock.Object,
                 _settingsMock.Object,
-                _killerMock.Object,
+                _serviceMock.Object,
                 () => positions
             );
         }

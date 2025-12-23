@@ -15,7 +15,7 @@ namespace AutoSizeStrategy.Tests
         private readonly Mock<IStrategyLogger> _loggerMock;
         private readonly Mock<IStrategyContext> _contextMock;
         private readonly Mock<IStrategySettings> _settingsMock;
-        private readonly Mock<IOrderKiller> _orderKillerMock;
+        private readonly Mock<ITradingService> _serviceMock;
         private readonly Mock<IAccount> _accountMock;
         private readonly Mock<ISymbol> _symbolMock;
         private readonly StrategyEngine _engine;
@@ -25,13 +25,13 @@ namespace AutoSizeStrategy.Tests
             _loggerMock = new Mock<IStrategyLogger>();
             _contextMock = new Mock<IStrategyContext>();
             _settingsMock = new Mock<IStrategySettings>();
-            _orderKillerMock = new Mock<IOrderKiller>();
+            _serviceMock = new Mock<ITradingService>();
             _accountMock = new Mock<IAccount>();
             _symbolMock = new Mock<ISymbol>();
 
             _contextMock.SetupGet(c => c.Logger).Returns(_loggerMock.Object);
             _contextMock.SetupGet(c => c.Settings).Returns(_settingsMock.Object);
-            _contextMock.SetupGet(c => c.OrderKiller).Returns(_orderKillerMock.Object);
+            _contextMock.SetupGet(c => c.TradingService).Returns(_serviceMock.Object);
             _contextMock
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(0);
@@ -453,8 +453,8 @@ namespace AutoSizeStrategy.Tests
 
             await _engine.ProcessFailSafe(order.Object);
 
-            // Should NOT call Kill
-            _orderKillerMock.Verify(k => k.Kill(It.IsAny<IOrder>()), Times.Never);
+            // Should NOT call Cancel
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>()), Times.Never);
         }
 
         [Fact]
@@ -474,16 +474,13 @@ namespace AutoSizeStrategy.Tests
                     l.LogInfo(
                         It.Is<string>(s =>
                             s.Contains(
-                                $"Killing Order {order.Object.Id}. Size is {order.Object.TotalQuantity}, must be {calculatedSize}."
+                                $"Cancelling Order {order.Object.Id}. Size is {order.Object.TotalQuantity}, must be {calculatedSize}."
                             )
                         )
                     ),
                 Times.Once
             );
-            _orderKillerMock.Verify(
-                k => k.Kill(It.Is<IOrder>(i => i.Id.Equals("456"))),
-                Times.Once
-            );
+            _serviceMock.Verify(s => s.Cancel(It.Is<IOrder>(i => i.Id.Equals("456"))), Times.Once);
         }
 
         [Fact]
@@ -510,13 +507,13 @@ namespace AutoSizeStrategy.Tests
             // Create a Buy Order (Reduce-Only for Short)
             var order = CreateMockOrder("id_reduce", 5);
             order.SetupGet(o => o.Side).Returns(Side.Buy);
-            // Simulate that the size is "wrong" according to risk to ensure it would be killed if not reduce-only
+            // Simulate that the size is "wrong" according to risk to ensure it would be cancelled if not reduce-only
             // (e.g. Risk calc might want 1 contract, but order is 5)
 
             await _engine.ProcessFailSafe(order.Object);
 
-            // Should NOT call Kill
-            _orderKillerMock.Verify(k => k.Kill(It.IsAny<IOrder>()), Times.Never);
+            // Should NOT call Cancel
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>()), Times.Never);
         }
 
         [Fact]
@@ -531,13 +528,13 @@ namespace AutoSizeStrategy.Tests
             var order = CreateMockOrder("id_reduce", 5);
             order.SetupGet(o => o.Side).Returns(Side.Buy);
             order.SetupGet(o => o.StopLossItems).Returns([]);
-            // Simulate that the size is "wrong" according to risk to ensure it would be killed if not reduce-only
+            // Simulate that the size is "wrong" according to risk to ensure it would be cancelled if not reduce-only
             // (e.g. Risk calc might want 1 contract, but order is 5)
 
             await _engine.ProcessFailSafe(order.Object);
 
-            // Should NOT call Kill
-            _orderKillerMock.Verify(k => k.Kill(It.IsAny<IOrder>()), Times.Never);
+            // Should NOT call Cancel
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>()), Times.Never);
         }
 
         #endregion

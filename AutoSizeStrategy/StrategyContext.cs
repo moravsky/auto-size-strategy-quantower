@@ -28,14 +28,14 @@ namespace AutoSizeStrategy
     {
         IStrategyLogger Logger { get; }
         IStrategySettings Settings { get; }
-        IOrderKiller OrderKiller { get; }
+        ITradingService TradingService { get; }
         double GetNetPositionQuantity(IAccount account, ISymbol symbol);
     }
 
     public record StrategyContext(
         IStrategyLogger Logger,
         IStrategySettings Settings,
-        IOrderKiller OrderKiller,
+        ITradingService TradingService,
         Func<IEnumerable<IPosition>> PositionProvider
     ) : IStrategyContext
     {
@@ -46,7 +46,7 @@ namespace AutoSizeStrategy
             : this(
                 Logger: autoSizeStrategy,
                 Settings: autoSizeStrategy,
-                new OrderKiller(autoSizeStrategy),
+                new TradingService(autoSizeStrategy),
                 () => Core.Instance.Positions.Select(p => new PositionWrapper(p))
             ) { }
 
@@ -66,7 +66,7 @@ namespace AutoSizeStrategy
         {
             if (!_disposed)
             {
-                OrderKiller.Dispose();
+                TradingService.Dispose();
                 _disposed = true;
             }
 

@@ -152,7 +152,7 @@ namespace AutoSizeStrategy
 
         public void ReportOrderRemoved(string orderId)
         {
-            context.OrderKiller.ReportCancelledOrder(orderId);
+            context.TradingService.ReportCancelledOrder(orderId);
         }
 
         private DrawdownMode InferDrawdownMode(string accountId)
@@ -209,7 +209,7 @@ namespace AutoSizeStrategy
                     }
 
                     context.Logger.LogInfo($"Cancelling order {order.Id}: missing stop loss");
-                    context.OrderKiller.Kill(order);
+                    context.TradingService.Cancel(order);
                     return;
                 }
                 else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
@@ -238,10 +238,10 @@ namespace AutoSizeStrategy
             if (riskCapital <= 0)
             {
                 context.Logger.LogInfo(
-                    $"Risk=0 for {account.Id}. Reason: {calculationReason}. Killing Order {order.Id}"
+                    $"Risk=0 for {account.Id}. Reason: {calculationReason}. Cancelling Order {order.Id}"
                 );
                 // If risk is 0, we can't trade.
-                context.OrderKiller.Kill(order);
+                context.TradingService.Cancel(order);
                 return;
             }
 
@@ -270,9 +270,9 @@ namespace AutoSizeStrategy
             if (Math.Abs(order.TotalQuantity - calculatedSize) > 0.001)
             {
                 context.Logger.LogInfo(
-                    $"Killing Order {order.Id}. Size is {order.TotalQuantity}, must be {calculatedSize}."
+                    $"Cancelling Order {order.Id}. Size is {order.TotalQuantity}, must be {calculatedSize}."
                 );
-                context.OrderKiller.Kill(order);
+                context.TradingService.Cancel(order);
             }
         }
 
