@@ -85,13 +85,13 @@ namespace AutoSizeStrategy.Tests
         public void TryRemove_WithOutParam_ReturnsExpirationDate()
         {
             using var set = new TrackingSet<string>();
-            var expiration = DateTime.UtcNow.AddMinutes(10);
-            set.TryTrack("item", expiration);
+            var expirationTime = DateTime.UtcNow.AddMinutes(10);
+            set.TryTrack("item", expirationTime);
 
             var result = set.TryRemove("item", out var returnedExpiration);
 
             Assert.True(result);
-            Assert.Equal(expiration, returnedExpiration);
+            Assert.Equal(expirationTime, returnedExpiration.Time);
         }
 
         [Fact]
@@ -210,6 +210,79 @@ namespace AutoSizeStrategy.Tests
             }
 
             Assert.Equal(1, processedCount);
+        }
+
+        [Fact]
+        public async Task WaitAsync_WhenItemIsRemoved_ReturnsTrue()
+        {
+            using var set = new TrackingSet<string>();
+            set.TryTrack("process-1");
+
+            // Start waiting in the background
+            var waitTask = set.WaitAsync("process-1");
+
+            // Simulate the process finishing and removing the item
+            set.TryRemove("process-1");
+
+            var result = await waitTask;
+            Assert.True(result);
+        }
+
+        [Fact]
+        public async Task WaitAsync_WhenItemDoesNotExist_ReturnsTrueImmediately()
+        {
+            using var set = new TrackingSet<string>();
+
+            // If the key isn't there, it should be considered "done"
+            var result = await set.WaitAsync("ghost-item");
+
+            Assert.True(result);
+        }
+
+        [Fact]
+        public async Task WaitAsync_OnTimeout_ReturnsFalse()
+        {
+            using var set = new TrackingSet<string>();
+            set.TryTrack("slow-process", DateTime.MaxValue);
+
+            // Set a very short timeout for the test
+            var result = await set.WaitAsync("slow-process", timeoutMs: 10);
+
+            Assert.False(result);
+        }
+
+        [Fact]
+        public async Task CleanupLoop_WhenExpiring_TriggersWaitAsync()
+        {
+            // Set short intervals for the test
+            using var set = new TrackingSet<string>(
+                cleanupInterval: TimeSpan.FromMilliseconds(50),
+                defaultExpirationTime: TimeSpan.FromMilliseconds(100)
+            );
+
+            set.TryTrack("expiring-item1");
+            var waitTask1 = set.WaitAsync("expiring-item1");
+            set.TryTrack("expiring-item2");
+            var waitTask2 = set.WaitAsync("expiring-item2");
+
+            // Wait for cleanup loop to run
+            await Task.Delay(250);
+
+            // The cleanup loop calls TryRemove, which should trigger the TCS
+            Assert.True(waitTask1.IsCompleted);
+            Assert.True(await waitTask1);
+            Assert.False(set.Contains("expiring-item1"));
+            Assert.True(waitTask2.IsCompleted);
+            Assert.True(await waitTask2);
+            Assert.False(set.Contains("expiring-item2"));
+        }
+
+        [Fact]
+        public void Dispose_ShouldNotThrow()
+        {
+            var set = new TrackingSet<string>();
+            var exception = Record.Exception(() => set.Dispose());
+            Assert.Null(exception);
         }
     }
 }
