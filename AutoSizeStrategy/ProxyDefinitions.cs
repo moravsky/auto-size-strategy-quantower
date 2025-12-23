@@ -185,15 +185,18 @@ namespace AutoSizeStrategy
         Side Side { get; set; }
         List<SlTpHolder> StopLossItems { get; set; }
         string OrderTypeId { get; init; }
+
+        TradingOperationResult Send();
     }
 
     public interface IModifyOrderRequestParameters : IOrderRequestParameters { }
 
     public interface IPlaceOrderRequestParameters : IOrderRequestParameters { }
 
-    public abstract class OrderRequestParametersWrapper(OrderRequestParameters inner)
-        : RequestParametersWrapper<OrderRequestParameters>(inner),
+    public abstract class OrderRequestParametersWrapper<T>(T inner)
+        : RequestParametersWrapper<T>(inner),
             IOrderRequestParameters
+        where T : OrderRequestParameters // Constraints ensure we only wrap order-related params
     {
         public double Quantity
         {
@@ -201,10 +204,9 @@ namespace AutoSizeStrategy
             set => Inner.Quantity = value;
         }
 
+        // Wrap the SDK Account/Symbol with our wrappers
         public IAccount Account { get; init; } = new AccountWrapper(inner.Account);
-
         public string AccountId { get; init; } = inner.AccountId;
-
         public ISymbol Symbol { get; init; } = new SymbolWrapper(inner.Symbol);
 
         public double Price
@@ -221,41 +223,44 @@ namespace AutoSizeStrategy
 
         public List<SlTpHolder> StopLossItems
         {
-            // proxy to inner
             get => Inner.StopLossItems ?? [];
             set
             {
-                // If the SDK list is null, we return safely to avoid the crash.
                 var sdkList = Inner.StopLossItems;
                 if (sdkList == null)
                     return;
 
                 sdkList.Clear();
                 if (value != null)
-                {
                     sdkList.AddRange(value);
-                }
             }
         }
 
         public string OrderTypeId { get; init; } = inner.OrderTypeId;
+
+        // TODO: Refactor so that proxy classes only return "our" types to the codebase.
+        // That way we minimize our ties to Quantower SDK to AutoSizeStrategy and
+        // ProxyDefinitions, which will make plugging other engines (Rithmic SDK) easier.
+        public abstract TradingOperationResult Send();
     }
 
     public class PlaceOrderRequestParametersWrapper(PlaceOrderRequestParameters inner)
-        : OrderRequestParametersWrapper(inner),
+        : OrderRequestParametersWrapper<PlaceOrderRequestParameters>(inner),
             IPlaceOrderRequestParameters
     {
-        // Secondary constructor for tests/mocking
         public PlaceOrderRequestParametersWrapper()
             : this(new PlaceOrderRequestParameters()) { }
+
+        public override TradingOperationResult Send() => Core.Instance.PlaceOrder(Inner);
     }
 
     public class ModifyOrderRequestParametersWrapper(ModifyOrderRequestParameters inner)
-        : OrderRequestParametersWrapper(inner),
+        : OrderRequestParametersWrapper<ModifyOrderRequestParameters>(inner),
             IModifyOrderRequestParameters
     {
-        // Secondary constructor for tests/mocking
         public ModifyOrderRequestParametersWrapper()
             : this(new ModifyOrderRequestParameters()) { }
+
+        public override TradingOperationResult Send() => Core.Instance.ModifyOrder(Inner);
     }
 }
