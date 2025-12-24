@@ -14,6 +14,7 @@ namespace AutoSizeStrategy
     {
         private static readonly TimeSpan DefaultCleanupInterval = TimeSpan.FromMilliseconds(200);
         private static readonly TimeSpan DefaultExpirationTime = TimeSpan.FromSeconds(5);
+        private const int DefaultWaitTimeoutMs = 5000;
 
         private readonly ConcurrentDictionary<T, Expiration> _tracked = new();
         private readonly CancellationTokenSource _cancellationTokenSource = new();
@@ -40,15 +41,27 @@ namespace AutoSizeStrategy
         }
 
         // Allows a caller to await the removal/cancellation of a specific tracked item.
-        public Task<bool> WaitAsync(T key, int timeoutMs = 5000)
+        public async Task<bool> WaitAsync(T key, int timeoutMs = DefaultWaitTimeoutMs)
         {
+            // If the item isn't tracked, it's effectively 'done'
             if (!_tracked.TryGetValue(key, out var expiration))
-                return Task.FromResult(true); // Already gone
+                return true;
 
-            var timeoutCts = new CancellationTokenSource(timeoutMs);
-            timeoutCts.Token.Register(() => expiration.Completion.TrySetResult(false)); // False on timeout
+            // Create a local timer for THIS specific caller's SLA
+            using var cts = new CancellationTokenSource();
+            var timeoutTask = Task.Delay(timeoutMs, cts.Token);
 
-            return expiration.Completion.Task;
+            // Race the shared completion task against our local timeout
+            var completedTask = await Task.WhenAny(expiration.Completion.Task, timeoutTask);
+
+            if (completedTask == expiration.Completion.Task)
+            {
+                cts.Cancel(); // Clean up the timer immediately
+                return await expiration.Completion.Task; // Return the actual result (true/false)
+            }
+
+            // Our local SLA hit before the platform responded
+            return false;
         }
 
         public bool Contains(T key)
