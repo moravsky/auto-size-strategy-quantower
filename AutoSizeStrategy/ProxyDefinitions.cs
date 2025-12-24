@@ -37,6 +37,10 @@ namespace AutoSizeStrategy
         ISymbol Symbol { get; }
         Side Side { get; }
         TradingOperationResult Cancel();
+        static IOrder Find(string orderId) =>
+            Core.Instance.Orders.FirstOrDefault(o => o.Id == orderId) is Order inner
+                ? new OrderWrapper(inner)
+                : null;
     }
 
     public class OrderWrapper(Order order) : IOrder
@@ -189,9 +193,34 @@ namespace AutoSizeStrategy
         TradingOperationResult Send();
     }
 
-    public interface IModifyOrderRequestParameters : IOrderRequestParameters { }
+    public interface IModifyOrderRequestParameters : IOrderRequestParameters
+    {
+        string OrderId { get; set; }
+    }
 
-    public interface IPlaceOrderRequestParameters : IOrderRequestParameters { }
+    public interface IPlaceOrderRequestParameters : IOrderRequestParameters
+    {
+        // Used in ModifyOrderRequestParameters cancel/replace scenarios
+        public static IPlaceOrderRequestParameters FromModify(
+            IModifyOrderRequestParameters modify,
+            double newQuantity
+        )
+        {
+            return new PlaceOrderRequestParametersWrapper
+            {
+                // The replacement must have a different RequestId than the original modification
+                RequestId = DateTime.UtcNow.Ticks,
+                Account = modify.Account,
+                AccountId = modify.AccountId,
+                Symbol = modify.Symbol,
+                Side = modify.Side,
+                Price = modify.Price,
+                OrderTypeId = modify.OrderTypeId,
+                Quantity = newQuantity,
+                StopLossItems = modify.StopLossItems?.ToList(), // Clone the list to avoid side effects
+            };
+        }
+    }
 
     public abstract class OrderRequestParametersWrapper<T>(T inner)
         : RequestParametersWrapper<T>(inner),
@@ -260,6 +289,8 @@ namespace AutoSizeStrategy
     {
         public ModifyOrderRequestParametersWrapper()
             : this(new ModifyOrderRequestParameters()) { }
+
+        public string OrderId { get; set; } = inner.OrderId;
 
         public override TradingOperationResult Send() => Core.Instance.ModifyOrder(Inner);
     }

@@ -10,6 +10,7 @@ namespace AutoSizeStrategy
         // TODO: Replace bool with rich result object
         bool Cancel(IOrder order);
         bool Place(IPlaceOrderRequestParameters parameters);
+        bool CancelReplace(string originalOrderId, IPlaceOrderRequestParameters newParams);
         bool CancelReplace(IOrder originalOrder, IPlaceOrderRequestParameters newParams);
 
         // Hooks for platform events
@@ -87,6 +88,16 @@ namespace AutoSizeStrategy
                 () => Task.FromResult(order.Cancel())
             );
             return true;
+        }
+
+        public bool CancelReplace(string orderId, IPlaceOrderRequestParameters newParams)
+        {
+            var order = IOrder.Find(orderId);
+            if (order == null)
+            {
+                return false;
+            }
+            return CancelReplace(order, newParams);
         }
 
         public bool CancelReplace(IOrder originalOrder, IPlaceOrderRequestParameters newParams)

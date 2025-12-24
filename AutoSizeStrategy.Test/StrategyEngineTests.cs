@@ -421,14 +421,17 @@ namespace AutoSizeStrategy.Tests
 
             _engine.ProcessRequest(requestMock.Object);
 
+            // Original modify request is cancelled, because changing quantity
+            // requires cancel/replace sequence
+            Assert.Equal(0, requestMock.Object.Quantity);
+
             // Balance 150k.
             // Risk 10% = $15K.
             // SL 20 ticks * $5/tick = $100 risk/contract.
-            // Expected Size = 150 contracts.
-            Assert.Equal(150, requestMock.Object.Quantity);
+            // Expected Replacement Size = 150 contracts.
 
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("Changed request"))),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Resizing modification"))),
                 Times.Once
             );
         }
