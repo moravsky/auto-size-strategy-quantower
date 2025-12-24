@@ -278,6 +278,22 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
+        public async Task WaitAsync_MultipleCallers_IndependentTimeouts()
+        {
+            using var set = new TrackingSet<string>();
+            set.TryTrack("multi-wait");
+
+            var shortWait = set.WaitAsync("multi-wait", timeoutMs: 50); // Should time out
+            var longWait = set.WaitAsync("multi-wait", timeoutMs: 5000); // Should succeed
+
+            await Task.Delay(100);
+            set.TryRemove("multi-wait"); // Trigger success
+
+            Assert.False(await shortWait); // Hit its 50ms SLA
+            Assert.True(await longWait); // Eventually got the 'true' signal
+        }
+
+        [Fact]
         public void Dispose_ShouldNotThrow()
         {
             var set = new TrackingSet<string>();
