@@ -141,8 +141,29 @@ namespace AutoSizeStrategy
             }
 
             // Set calculated size
-            if (orderRequestParameters.Quantity != calculatedSize)
+            if (!MathUtil.Equals(orderRequestParameters.Quantity, calculatedSize))
             {
+                if (requestParameters is IModifyOrderRequestParameters modifyOrderRequestParameters)
+                {
+                    // If the new calculated size differs from the current order size
+                    // we must Cancel-Replace to avoid broker "Modify refused" errors.
+                    context.Logger.LogInfo(
+                        $"Resizing modification for {orderRequestParameters.RequestId}. Switching to Cancel-Replace."
+                    );
+
+                    // Trigger the background orchestration
+                    context.TradingService.CancelReplace(
+                        modifyOrderRequestParameters.OrderId,
+                        IPlaceOrderRequestParameters.FromModify(
+                            modifyOrderRequestParameters,
+                            calculatedSize
+                        )
+                    );
+
+                    // Set current request quantity to 0 to kill the native SDK modification
+                    orderRequestParameters.Quantity = 0;
+                    return;
+                }
                 context.Logger.LogInfo(
                     $"Changed request {orderRequestParameters.RequestId} quantity from {orderRequestParameters.Quantity} to {calculatedSize}"
                 );
