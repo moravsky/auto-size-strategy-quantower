@@ -12,14 +12,14 @@ namespace AutoSizeStrategy.Test
     /// </summary>
     public class RiskCalculatorTests
     {
-        #region CalculateRiskCapital
+        #region CalculatePositionSize
         [Theory]
         // riskCapital, stopDistanceTicks, tickValue, expectedSize
         [InlineData(500, 20, 5, 5)]
         [InlineData(500, 30, 5, 3)]
         [InlineData(100, 40, 0.5, 5)]
         [InlineData(300, 25, 1, 12)]
-        public void CalculatePositionSize3_Scenarios_CalculatesCorrectly(
+        public void CalculatePositionSize3_Scenarios_CalculateCorrectly(
             double riskCapital,
             double stopDistanceTicks,
             double tickValue,
@@ -73,7 +73,7 @@ namespace AutoSizeStrategy.Test
         // BARELY ENOUGH: Risk $100. Stop 5pts ES ($100 risk).
         // Result: Exact match = 1.
         [InlineData(100, 4105, 4100, 0.25, 5, 1)]
-        public void CalculatePositionSize_Overload_ReturnsCorrectSize(
+        public void CalculatePositionSize5_Scenarios_ReturnCorrectSize(
             double riskCapital,
             double entryPrice,
             double exitPrice,
@@ -129,6 +129,54 @@ namespace AutoSizeStrategy.Test
             );
         }
 
+        [Theory]
+        [InlineData(double.NaN, 20, 5)]
+        [InlineData(double.PositiveInfinity, 20, 5)]
+        [InlineData(500, double.NaN, 5)]
+        [InlineData(500, 20, double.NegativeInfinity)]
+        public void CalculatePositionSize3_NonFiniteInputs_ThrowsException(
+            double riskCapital,
+            double stopTicks,
+            double tickVal
+        )
+        {
+            // These should trigger MathUtil.ValidateFinite
+            Assert.ThrowsAny<ArgumentException>(() =>
+                RiskCalculator.CalculatePositionSize(riskCapital, stopTicks, tickVal)
+            );
+        }
+
+        [Theory]
+        [InlineData(double.NaN, 5000, 4990, 0.25, 5)]
+        [InlineData(500, double.PositiveInfinity, 4990, 0.25, 5)]
+        [InlineData(500, 5000, double.NaN, 0.25, 5)]
+        [InlineData(500, 5000, 4990, double.NegativeInfinity, 5)]
+        [InlineData(500, 5000, 4990, 0.25, double.PositiveInfinity)]
+        public void CalculatePositionSize5_NonFiniteInputs_ThrowsException(
+            double risk,
+            double entry,
+            double stop,
+            double tickSize,
+            double tickVal
+        )
+        {
+            Assert.ThrowsAny<ArgumentException>(() =>
+                RiskCalculator.CalculatePositionSize(risk, entry, stop, tickSize, tickVal)
+            );
+        }
+
+        [Fact]
+        public void CalculatePositionSize_RiskTooSmall_ReturnsZeroContracts()
+        {
+            // $5 risk, 20 tick stop, $5/tick = 0.05 contracts -> should be rounded down to zero
+            int size = RiskCalculator.CalculatePositionSize(5, 20, 5);
+            Assert.Equal(0, size);
+        }
+
+        #endregion
+
+        #region GetStopDistanceTicks
+
         [Fact]
         public void GetStopDistanceTicks_AbsolutePriceMeasurement_ReturnsCorrect()
         {
@@ -148,6 +196,12 @@ namespace AutoSizeStrategy.Test
         [Theory]
         [InlineData(6000, 6005, 0)] // zero tick size
         [InlineData(6000, 6005, -0.25)] // negative tick size
+        [InlineData(6000, 6005, double.NegativeInfinity)] // -∞ tick size
+        [InlineData(6000, 6005, double.PositiveInfinity)] // ∞ tick size
+        [InlineData(6000, 6005, double.NaN)] // NaN tick size
+        [InlineData(6000, double.NegativeInfinity, 0.25)] // -∞ tick size
+        [InlineData(6000, double.PositiveInfinity, 0.25)] // ∞ stop price
+        [InlineData(6000, double.NaN, 0.25)] // NaN stop price
         public void GetStopDistanceTicks_InvalidInputs_ThrowsArgumentException(
             double entryPrice,
             double stopPrice,
@@ -169,30 +223,28 @@ namespace AutoSizeStrategy.Test
             );
         }
 
-        [Fact]
-        public void CalculatePositionSize_RiskTooSmall_ReturnsZeroContracts()
+        [Theory]
+        [InlineData(0.25, double.PositiveInfinity)]
+        [InlineData(0.25, double.NegativeInfinity)]
+        [InlineData(0.25, double.NaN)]
+        [InlineData(double.PositiveInfinity, 25_000)]
+        [InlineData(double.NegativeInfinity, 25_000)]
+        [InlineData(double.NaN, 25_000)]
+        public void GetStopDistanceTicks_NonFiniteEntryPrice_ThrowsArgumentException(
+            double tickSize,
+            double entryPrice
+        )
         {
-            // $5 risk, 20 tick stop, $5/tick = 0.05 contracts -> should be rounded down to zero
-            int size = RiskCalculator.CalculatePositionSize(5, 20, 5);
-            Assert.Equal(0, size);
+            var slTpHolder = SlTpHolder.CreateSL(10, PriceMeasurement.Offset);
+
+            Assert.ThrowsAny<Exception>(() =>
+                RiskCalculator.GetStopDistanceTicks(slTpHolder, tickSize, entryPrice)
+            );
         }
 
         #endregion
 
         #region CalculateRiskCapital
-        private static IAccount CreateAccount(
-            double balance,
-            Dictionary<string, string>? additionalInfo = null
-        )
-        {
-            var mock = new Mock<IAccount>();
-            mock.SetupGet(a => a.Balance).Returns(balance);
-            if (additionalInfo != null)
-            {
-                mock.SetupGet(a => a.AdditionalInfo).Returns(additionalInfo);
-            }
-            return mock.Object;
-        }
 
         [Theory]
         // STANDARD ACCOUNT
@@ -263,6 +315,35 @@ namespace AutoSizeStrategy.Test
 
             Assert.Equal(expectedRisk, riskCapital, precision: 4);
             Assert.Contains("OK", reason);
+        }
+
+        [Theory]
+        [InlineData("inf")]
+        [InlineData("-inf")]
+        [InlineData("Infinity")]
+        [InlineData("-Infinity")]
+        [InlineData("NaN")]
+        public void CalculateRiskCapital_InfiniteLiquidateThreshold_Throws(
+            string liquidateThreshold
+        )
+        {
+            var account = CreateAccount(
+                150_000,
+                new Dictionary<string, string>
+                {
+                    { "AutoLiquidateThresholdCurrentValue", liquidateThreshold },
+                }
+            );
+
+            string calculationReason = "";
+            Assert.Throws<ArgumentException>(() =>
+                RiskCalculator.CalculateRiskCapital(
+                    account,
+                    riskPercent: 10.0,
+                    DrawdownMode.Intraday,
+                    out calculationReason
+                )
+            );
         }
 
         [Theory]
@@ -396,6 +477,9 @@ namespace AutoSizeStrategy.Test
         }
 
         [Theory]
+        [InlineData(double.PositiveInfinity)]
+        [InlineData(double.NegativeInfinity)]
+        [InlineData(double.NaN)]
         [InlineData(0.0)]
         [InlineData(-5.0)]
         public void CalculateRiskCapital_InvalidRiskPercent_ThrowsArgumentException(double percent)
@@ -428,5 +512,19 @@ namespace AutoSizeStrategy.Test
         }
 
         #endregion
+
+        private static IAccount CreateAccount(
+            double balance,
+            Dictionary<string, string>? additionalInfo = null
+        )
+        {
+            var mock = new Mock<IAccount>();
+            mock.SetupGet(a => a.Balance).Returns(balance);
+            if (additionalInfo != null)
+            {
+                mock.SetupGet(a => a.AdditionalInfo).Returns(additionalInfo);
+            }
+            return mock.Object;
+        }
     }
 }

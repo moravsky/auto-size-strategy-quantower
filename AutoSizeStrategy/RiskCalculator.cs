@@ -33,17 +33,9 @@ namespace AutoSizeStrategy
             double tickValue
         )
         {
-            if (
-                double.IsNaN(riskCapital)
-                || double.IsInfinity(riskCapital)
-                || double.IsNaN(stopDistanceTicks)
-                || double.IsInfinity(stopDistanceTicks)
-                || double.IsNaN(tickValue)
-                || double.IsInfinity(tickValue)
-            )
-            {
-                throw new ArgumentException("Input values must be finite numbers");
-            }
+            MathUtil.ValidateFinite(riskCapital, nameof(riskCapital));
+            MathUtil.ValidateFinite(stopDistanceTicks, nameof(stopDistanceTicks));
+            MathUtil.ValidateFinite(tickValue, nameof(tickValue));
 
             // Could happen in a valid scenario
             if (riskCapital <= 0)
@@ -54,6 +46,7 @@ namespace AutoSizeStrategy
             // This is a configuration error if false (Impossible Instrument).
             if (tickValue <= 0)
             {
+                // TODO: Change to ArgumentOutOfRangeException
                 throw new ArgumentException("Tick value must be positive", nameof(tickValue));
             }
 
@@ -79,21 +72,11 @@ namespace AutoSizeStrategy
             double tickValue
         )
         {
-            if (
-                double.IsNaN(riskCapital)
-                || double.IsInfinity(riskCapital)
-                || double.IsNaN(entryPrice)
-                || double.IsInfinity(entryPrice)
-                || double.IsNaN(stopPrice)
-                || double.IsInfinity(stopPrice)
-                || double.IsNaN(tickSize)
-                || double.IsInfinity(tickSize)
-                || double.IsNaN(tickValue)
-                || double.IsInfinity(tickValue)
-            )
-            {
-                throw new ArgumentException("Input values must be finite numbers");
-            }
+            MathUtil.ValidateFinite(riskCapital, nameof(riskCapital));
+            MathUtil.ValidateFinite(entryPrice, nameof(entryPrice));
+            MathUtil.ValidateFinite(stopPrice, nameof(stopPrice));
+            MathUtil.ValidateFinite(tickSize, nameof(tickSize));
+            MathUtil.ValidateFinite(tickValue, nameof(tickValue));
 
             if (tickSize <= 0)
             {
@@ -121,13 +104,13 @@ namespace AutoSizeStrategy
             double entryPrice
         )
         {
+            MathUtil.ValidateFinite(slTpHolder.Price, nameof(slTpHolder) + ".Price");
+            MathUtil.ValidateFinite(tickSize, nameof(tickSize));
+            MathUtil.ValidateFinite(entryPrice, nameof(entryPrice));
+
             if (tickSize <= 0)
             {
                 throw new ArgumentException("Tick size must be positive");
-            }
-            if (double.IsNaN(entryPrice) || double.IsInfinity(entryPrice))
-            {
-                throw new ArgumentException("Input values must be finite numbers");
             }
 
             if (slTpHolder.PriceMeasurement == PriceMeasurement.Offset)
@@ -156,6 +139,7 @@ namespace AutoSizeStrategy
             out string reason
         )
         {
+            MathUtil.ValidateFinite(riskPercent, nameof(riskPercent));
             ArgumentNullException.ThrowIfNull(account);
 
             if (riskPercent <= 0 || riskPercent > 100)
@@ -252,13 +236,14 @@ namespace AutoSizeStrategy
                 && !string.IsNullOrWhiteSpace(valStr)
             )
             {
-                // InvariantCulture prevents issues if server sends "145.500" vs "145,500"
-                return double.TryParse(
-                    valStr,
-                    System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out result
-                );
+                // This will return true for "inf", "123.45", and "Infinity"
+                bool success = valStr.TryParseDouble(out result);
+                if (success)
+                {
+                    MathUtil.ValidateFinite(result, $"account.AdditionalInfo[{key}]");
+                }
+
+                return success;
             }
             return false;
         }

@@ -286,5 +286,49 @@ namespace AutoSizeStrategy.Tests
 
             Assert.Null(result);
         }
+
+        [Theory]
+        // Standard Numbers
+        [InlineData("123.45", 123.45, true)]
+        [InlineData("0", 0.0, true)]
+        [InlineData("-50.2", -50.2, true)]
+        // Thousands Separators (NumberStyles.AllowThousands)
+        [InlineData("1,250.50", 1250.50, true)]
+        [InlineData("1,000,000", 1000000.0, true)]
+        // Scientific Notation (NumberStyles.Float)
+        [InlineData("1.2e3", 1200.0, true)]
+        [InlineData("5E-2", 0.05, true)]
+        // The "Problem" Shorthands
+        [InlineData("inf", double.PositiveInfinity, true)]
+        [InlineData("+inf", double.PositiveInfinity, true)]
+        [InlineData("-inf", double.NegativeInfinity, true)]
+        [InlineData(" INF ", double.PositiveInfinity, true)] // Case-insensitive and whitespace
+        // Standard .NET Infinity/NaN
+        [InlineData("Infinity", double.PositiveInfinity, true)]
+        [InlineData("-Infinity", double.NegativeInfinity, true)]
+        [InlineData("NaN", double.NaN, true)]
+        // Invalid Cases
+        [InlineData("abc", 0, false)]
+        [InlineData("12.34.56", 0, false)]
+        [InlineData("", 0, false)]
+        [InlineData(null, 0, false)]
+        public void TryParseDouble_VariousInputs_ReturnsExpected(
+            string? input,
+            double expectedValue,
+            bool expectedSuccess
+        )
+        {
+            bool success = input.TryParseDouble(out double result);
+
+            Assert.Equal(expectedSuccess, success);
+            if (expectedSuccess)
+            {
+                // Note: NaN != NaN, so we use the double checker for that specific case
+                if (double.IsNaN(expectedValue))
+                    Assert.True(double.IsNaN(result));
+                else
+                    Assert.Equal(expectedValue, result);
+            }
+        }
     }
 }

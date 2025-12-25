@@ -24,5 +24,14 @@ namespace AutoSizeStrategy.Test
         {
             Assert.Equal(expected, MathUtil.Equals(a, b));
         }
+
+        [Theory]
+        [InlineData(Double.NegativeInfinity)]
+        [InlineData(Double.PositiveInfinity)]
+        [InlineData(Double.NaN)]
+        public void CheckFinite_Throws_NotFinite(double value)
+        {
+            Assert.Throws<ArgumentException>(() => MathUtil.ValidateFinite(value));
+        }
     }
 }

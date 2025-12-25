@@ -118,5 +118,39 @@ namespace AutoSizeStrategy
                 };
             });
         }
+
+        // Just like double.TryParse, but handles "inf" and "Infinity"
+        public static bool TryParseDouble(this string value, out double result)
+        {
+            // Try standard parsing first (handles "Infinity", "1.23", etc.)
+            if (
+                double.TryParse(
+                    value,
+                    System.Globalization.NumberStyles.Float
+                        | System.Globalization.NumberStyles.AllowThousands,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out result
+                )
+            )
+            {
+                return true;
+            }
+
+            // Fallback for shorthand broker symbols that standard .NET misses
+            string clean = value?.Trim().ToLowerInvariant();
+            if (clean == "inf" || clean == "+inf")
+            {
+                result = double.PositiveInfinity;
+                return true;
+            }
+
+            if (clean == "-inf")
+            {
+                result = double.NegativeInfinity;
+                return true;
+            }
+
+            return false;
+        }
     }
 }
