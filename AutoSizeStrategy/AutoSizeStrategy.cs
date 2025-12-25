@@ -10,7 +10,6 @@ namespace AutoSizeStrategy
     public class AutoSizeStrategy : Strategy, IStrategyLogger, IStrategySettings, IDisposable
     {
         private bool _disposed;
-        private string _instanceId;
         private StrategyEngine strategyEngine;
         private CancellationTokenSource _shutdownCts;
 
@@ -41,11 +40,6 @@ namespace AutoSizeStrategy
             this.Name = "AutoSizeStrategy42";
             this.Description =
                 "Size orders for ALL symbols and accounts according to risk parameters.";
-        }
-
-        protected override void OnCreated()
-        {
-            _instanceId = Guid.NewGuid().ToString().Substring(0, 4).ToUpper();
         }
 
         protected override void OnRun()
