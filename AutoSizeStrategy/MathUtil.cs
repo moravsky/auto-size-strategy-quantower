@@ -15,5 +15,13 @@ namespace AutoSizeStrategy
         {
             return Math.Abs(a - b) < Epsilon;
         }
+
+        public static void ValidateFinite(double value, string name = "value")
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                throw new ArgumentException($"Value must be finite, was {value}", name);
+            }
+        }
     }
 }
