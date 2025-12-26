@@ -54,7 +54,20 @@ namespace AutoSizeStrategy.Test
             modifyMock.SetupGet(m => m.Side).Returns(Side.Buy);
             modifyMock.SetupGet(m => m.Price).Returns(5000.0);
             modifyMock.SetupGet(m => m.OrderTypeId).Returns(OrderType.Limit);
-            modifyMock.SetupGet(m => m.StopLossItems).Returns(new List<SlTpHolder>());
+
+            var stopLossItems = new List<SlTpHolder>()
+            {
+                SlTpHolder.CreateSL(4995, PriceMeasurement.Absolute),
+                SlTpHolder.CreateSL(40, PriceMeasurement.Offset),
+            };
+            modifyMock.SetupGet(m => m.StopLossItems).Returns(stopLossItems);
+
+            var takeProfitItems = new List<SlTpHolder>()
+            {
+                SlTpHolder.CreateTP(5005, PriceMeasurement.Absolute),
+                SlTpHolder.CreateTP(40, PriceMeasurement.Offset),
+            };
+            modifyMock.SetupGet(m => m.TakeProfitItems).Returns(takeProfitItems);
 
             var result =
                 IPlaceOrderRequestParameters.FromModify(modifyMock.Object, 5.0)
@@ -68,6 +81,8 @@ namespace AutoSizeStrategy.Test
             Assert.Equal(OrderType.Limit, result.OrderTypeId);
             Assert.Same(accMock.Object, result.Account);
             Assert.Same(symMock.Object, result.Symbol);
+            Assert.Equal(stopLossItems, result.StopLossItems);
+            Assert.Equal(takeProfitItems, result.TakeProfitItems);
 
             Assert.Equal(Side.Buy, result.Inner.Side);
             Assert.Equal(5000.0, result.Inner.Price);
@@ -87,6 +102,21 @@ namespace AutoSizeStrategy.Test
 
             Assert.Equal(42, inner.Quantity); // Verifies proxying to Inner
             Assert.Equal(1234.5, inner.Price);
+        }
+
+        [Fact]
+        public void FromModify_BracketsMatchQuantity_RegardlessOfAssignmentOrder()
+        {
+            var wrapper = new PlaceOrderRequestParametersWrapper();
+            var sl = SlTpHolder.CreateSL(10, PriceMeasurement.Offset);
+            sl.Quantity = 1; // Start with wrong quantity
+
+            // Act: Set StopLoss then Quantity
+            wrapper.StopLossItems = new List<SlTpHolder> { sl };
+            wrapper.Quantity = 5;
+
+            // Assert
+            Assert.Equal(5, wrapper.Inner.StopLossItems[0].Quantity);
         }
     }
 }

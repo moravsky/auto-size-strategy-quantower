@@ -441,6 +441,9 @@ namespace AutoSizeStrategy.Tests
             var slList = new List<SlTpHolder> { SlTpHolder.CreateSL(20, PriceMeasurement.Offset) };
             requestMock.SetupGet(r => r.StopLossItems).Returns(slList);
 
+            var tpList = new List<SlTpHolder> { SlTpHolder.CreateTP(20, PriceMeasurement.Offset) };
+            requestMock.SetupGet(r => r.TakeProfitItems).Returns(tpList);
+
             // Setup the "Requested" Quantity
             // We use SetupProperty so the Engine can update it
             requestMock.SetupProperty(r => r.Quantity, 100);
@@ -572,11 +575,13 @@ namespace AutoSizeStrategy.Tests
 
         private PlaceOrderRequestParametersWrapper CreateValidRequest(
             double quantity,
-            double stopDistanceTicks
+            double stopDistanceTicks = 20,
+            double profitDistanceTicks = 40
         )
         {
             double currentPrice = _symbolMock.Object.Last;
-            var slTpHolder = SlTpHolder.CreateSL(stopDistanceTicks, PriceMeasurement.Offset);
+            var slHolder = SlTpHolder.CreateSL(stopDistanceTicks, PriceMeasurement.Offset);
+            var tpHolder = SlTpHolder.CreateTP(profitDistanceTicks, PriceMeasurement.Offset);
 
             return new PlaceOrderRequestParametersWrapper
             {
@@ -584,7 +589,8 @@ namespace AutoSizeStrategy.Tests
                 Account = _accountMock.Object,
                 Symbol = _symbolMock.Object,
                 Price = currentPrice,
-                StopLossItems = [slTpHolder],
+                StopLossItems = [slHolder],
+                TakeProfitItems = [tpHolder],
                 OrderTypeId = OrderType.Limit,
             };
         }
