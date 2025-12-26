@@ -184,6 +184,7 @@ namespace AutoSizeStrategy
         double Price { get; set; }
         Side Side { get; set; }
         List<SlTpHolder> StopLossItems { get; set; }
+        List<SlTpHolder> TakeProfitItems { get; set; }
         string OrderTypeId { get; init; }
 
         TradingOperationResult Send();
@@ -212,6 +213,7 @@ namespace AutoSizeStrategy
                 OrderTypeId = modify.OrderTypeId,
                 Quantity = newQuantity,
                 StopLossItems = modify.StopLossItems?.ToList(), // Clone the list to avoid side effects
+                TakeProfitItems = modify.TakeProfitItems?.ToList(),
             };
         }
     }
@@ -257,7 +259,13 @@ namespace AutoSizeStrategy
         public double Quantity
         {
             get => Inner.Quantity;
-            set => Inner.Quantity = value;
+            set
+            {
+                Inner.Quantity = value;
+                // Simplified Sync: Just update the first SL/TP if they exist
+                SyncFirstBracket(Inner.StopLossItems, value);
+                SyncFirstBracket(Inner.TakeProfitItems, value);
+            }
         }
 
         public double Price
@@ -283,7 +291,28 @@ namespace AutoSizeStrategy
 
                 sdkList.Clear();
                 if (value != null)
+                {
                     sdkList.AddRange(value);
+                    SyncFirstBracket(sdkList, this.Quantity);
+                }
+            }
+        }
+
+        public List<SlTpHolder> TakeProfitItems
+        {
+            get => Inner.TakeProfitItems ?? [];
+            set
+            {
+                var sdkList = Inner.TakeProfitItems;
+                if (sdkList == null)
+                    return;
+
+                sdkList.Clear();
+                if (value != null)
+                {
+                    sdkList.AddRange(value);
+                    SyncFirstBracket(sdkList, this.Quantity);
+                }
             }
         }
 
@@ -297,6 +326,15 @@ namespace AutoSizeStrategy
         // That way we minimize our ties to Quantower SDK to AutoSizeStrategy and
         // ProxyDefinitions, which will make plugging other engines (Rithmic SDK) easier.
         public abstract TradingOperationResult Send();
+
+        // TODO: Support multiple brackets
+        private void SyncFirstBracket(List<SlTpHolder> brackets, double qty)
+        {
+            if (brackets != null && brackets.Count > 0)
+            {
+                brackets[0].Quantity = qty;
+            }
+        }
     }
 
     public class PlaceOrderRequestParametersWrapper(PlaceOrderRequestParameters inner)
