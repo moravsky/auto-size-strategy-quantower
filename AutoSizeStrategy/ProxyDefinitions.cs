@@ -85,6 +85,7 @@ namespace AutoSizeStrategy
             Balance = wrapper?.Balance ?? default;
         }
 
+        public Account Inner => account;
         public string Id { get; } = account?.Id ?? default;
         public double Balance { get; } = account?.Balance ?? default;
 
@@ -131,6 +132,7 @@ namespace AutoSizeStrategy
 
     public class SymbolWrapper(Symbol symbol) : ISymbol
     {
+        public Symbol Inner => symbol;
         public string Id => symbol.Id;
         public double TickSize => symbol.TickSize;
         public double Last => symbol.Last;
@@ -140,25 +142,20 @@ namespace AutoSizeStrategy
 
     public interface IRequestParameters
     {
-        long RequestId { get; set; }
+        long RequestId { get; }
         CancellationToken CancellationToken { get; set; }
     }
 
     public class RequestParametersWrapper(RequestParameters inner) : IRequestParameters
     {
-        private long _requestId;
-
         public RequestParameters BaseInner { get; } = inner;
 
-        public long RequestId
-        {
-            get => BaseInner?.RequestId ?? _requestId;
-            set => _requestId = value;
-        }
+        // Use the SDK's auto-generated or cloned ID as the source of truth
+        public long RequestId => BaseInner.RequestId;
 
         public CancellationToken CancellationToken
         {
-            get => BaseInner?.CancellationToken ?? default;
+            get => BaseInner.CancellationToken;
             set => BaseInner.CancellationToken = value;
         }
 
@@ -208,8 +205,7 @@ namespace AutoSizeStrategy
         {
             return new PlaceOrderRequestParametersWrapper
             {
-                // The replacement must have a different RequestId than the original modification
-                RequestId = DateTime.UtcNow.Ticks,
+                // The replacement uses SDK's autoincrement logic for RequestId
                 Account = modify.Account,
                 AccountId = modify.AccountId,
                 Symbol = modify.Symbol,
@@ -227,16 +223,50 @@ namespace AutoSizeStrategy
             IOrderRequestParameters
         where T : OrderRequestParameters // Constraints ensure we only wrap order-related params
     {
-        public double Quantity
+        // Wrap the SDK Account/Symbol with our wrappers
+        private IAccount _accountWrapper = new AccountWrapper(inner.Account);
+        private ISymbol _symbolWrapper = new SymbolWrapper(inner.Symbol);
+
+        public IAccount Account
         {
-            get => Inner?.Quantity ?? default;
-            set => Inner.Quantity = value;
+            get => _accountWrapper;
+            init
+            {
+                _accountWrapper = value;
+                // The "Unwrap" Bridge: Sync back to the SDK object
+                if (value is AccountWrapper wrapper)
+                {
+                    Inner.Account = wrapper.Inner;
+                }
+            }
         }
 
-        // Wrap the SDK Account/Symbol with our wrappers
-        public IAccount Account { get; init; } = new AccountWrapper(inner.Account);
-        public string AccountId { get; init; } = inner.AccountId;
-        public ISymbol Symbol { get; init; } = new SymbolWrapper(inner.Symbol);
+        public ISymbol Symbol
+        {
+            get => _symbolWrapper;
+            init
+            {
+                _symbolWrapper = value;
+                // The "Unwrap" Bridge: Sync back to the SDK object
+                if (value is SymbolWrapper wrapper)
+                {
+                    Inner.Symbol = wrapper.Inner;
+                }
+            }
+        }
+
+        // SDK settable properties proxy to Inner. Read-only properties are cached.
+        public string AccountId
+        {
+            get => Inner.AccountId;
+            set => Inner.AccountId = value;
+        }
+
+        public double Quantity
+        {
+            get => Inner.Quantity;
+            set => Inner.Quantity = value;
+        }
 
         public double Price
         {
@@ -265,7 +295,11 @@ namespace AutoSizeStrategy
             }
         }
 
-        public string OrderTypeId { get; init; } = inner.OrderTypeId;
+        public string OrderTypeId
+        {
+            get => Inner.OrderTypeId;
+            init => Inner.OrderTypeId = value;
+        }
 
         // TODO: Refactor so that proxy classes only return "our" types to the codebase.
         // That way we minimize our ties to Quantower SDK to AutoSizeStrategy and
