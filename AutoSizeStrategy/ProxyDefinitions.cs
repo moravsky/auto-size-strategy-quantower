@@ -180,7 +180,6 @@ namespace AutoSizeStrategy
     {
         double Quantity { get; set; }
         IAccount Account { get; }
-        string AccountId { get; }
         ISymbol Symbol { get; }
         double Price { get; set; }
         Side Side { get; set; }
@@ -207,7 +206,6 @@ namespace AutoSizeStrategy
             {
                 // The replacement uses SDK's autoincrement logic for RequestId
                 Account = modify.Account,
-                AccountId = modify.AccountId,
                 Symbol = modify.Symbol,
                 Side = modify.Side,
                 Price = modify.Price,
@@ -256,12 +254,6 @@ namespace AutoSizeStrategy
         }
 
         // SDK settable properties proxy to Inner. Read-only properties are cached.
-        public string AccountId
-        {
-            get => Inner.AccountId;
-            set => Inner.AccountId = value;
-        }
-
         public double Quantity
         {
             get => Inner.Quantity;
