@@ -581,7 +581,7 @@ namespace AutoSizeStrategy.Tests
 
     public class SomeOtherRequestParameters : IRequestParameters
     {
-        public long RequestId { get; set; } = default;
+        public long RequestId { get; init; } = default;
         public CancellationToken CancellationToken { get; set; } = default;
     }
 }
