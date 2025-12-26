@@ -27,7 +27,7 @@ namespace AutoSizeStrategy
             ProcessRequest(wrapper);
         }
 
-        public void ProcessRequest(IRequestParameters requestParameters)
+        public virtual void ProcessRequest(IRequestParameters requestParameters)
         {
             if (requestParameters is not IOrderRequestParameters orderRequestParameters)
                 return;
@@ -39,7 +39,7 @@ namespace AutoSizeStrategy
             }
 
             // Check account filter
-            if (context.Settings.TargetAccount.Id != orderRequestParameters.AccountId)
+            if (context.Settings.TargetAccount.Id != orderRequestParameters.Account.Id)
             {
                 return;
             }

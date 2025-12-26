@@ -150,19 +150,6 @@ namespace AutoSizeStrategy.Tests
         #region ProcessRequest ---------------------------------------------
 
         [Fact]
-        public void ProcessRequest_Sdk_PlaceOrderRequestParameters_WrappedCorrectly()
-        {
-            var request = new PlaceOrderRequestParameters
-            {
-                AccountId = _accountMock.Object.Id,
-                Quantity = 2,
-            };
-            _engine.ProcessRequest(request);
-
-            Assert.Equal(0, request.Quantity); // set to 0 without SL
-        }
-
-        [Fact]
         public void ProcessRequest_Resizes_Correctly()
         {
             _accountMock.SetupGet(a => a.Balance).Returns(2000.0);
@@ -328,18 +315,21 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void ProcessRequest_Logs_WhenRequestAlreadyProcessed()
         {
-            var request = new PlaceOrderRequestParameters
-            {
-                AccountId = _accountMock.Object.Id,
-                Quantity = 0,
-            };
-
-            _engine.ProcessRequest(request);
+            var request = CreateValidRequest(quantity: 123, stopDistanceTicks: 40);
+            // process request once, so we track request id as processed
             _engine.ProcessRequest(request);
 
-            Assert.Equal(0, request.Quantity); // passed through size
+            request.Quantity = 456;
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(456, request.Quantity); // passed through size
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("passing through unchanged"))),
+                l =>
+                    l.LogInfo(
+                        It.Is<string>(s =>
+                            s.Contains("has already been processed - passing through unchanged")
+                        )
+                    ),
                 Times.Once
             );
         }
@@ -373,30 +363,67 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public void ProcessRequest_Hydration_WrapsAndValidatesModifyOrder()
+        public void ProcessRequest_Place_HydratesWrapperCorrectly()
         {
-            var sdkParams = new ModifyOrderRequestParameters
+            IRequestParameters? capturedWrapper = null;
+            var engineMock = new Mock<StrategyEngine>(_contextMock.Object) { CallBase = true };
+
+            // Capture the wrapper, don't execute the real method
+            engineMock
+                .Setup(e => e.ProcessRequest(It.IsAny<IRequestParameters>()))
+                .Callback<IRequestParameters>(p => capturedWrapper = p);
+
+            var sdkParams = new PlaceOrderRequestParameters
             {
-                AccountId = _accountMock.Object.Id,
-                Quantity = 100, // Requesting 100
-                Price = 5000,
+                Quantity = 123,
+                Price = 5432,
+                OrderTypeId = OrderType.Limit,
+                Side = Side.Buy,
             };
 
-            _settingsMock
-                .SetupGet(s => s.MissingStopLossAction)
-                .Returns(MissingStopLossAction.Reject);
+            engineMock.Object.ProcessRequest(sdkParams);
 
-            _engine.ProcessRequest(sdkParams);
+            // Verify hydration
+            Assert.NotNull(capturedWrapper);
+            Assert.IsType<PlaceOrderRequestParametersWrapper>(capturedWrapper);
 
-            // The engine should have hydrated the wrapper, seen the empty StopLoss list, and set Qty to 0
-            Assert.Equal(0, sdkParams.Quantity);
-            // Price should remain unchanged
-            Assert.Equal(5000, sdkParams.Price);
+            var wrapper = (PlaceOrderRequestParametersWrapper)capturedWrapper;
+            Assert.Equal(123, wrapper.Quantity);
+            Assert.Equal(5432, wrapper.Price);
+            Assert.Equal(OrderType.Limit, wrapper.OrderTypeId);
+            Assert.Equal(Side.Buy, wrapper.Side);
+        }
 
-            _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("cancelled: stop loss required"))),
-                Times.Once
-            );
+        [Fact]
+        public void ProcessRequest_Modify_HydratesWrapperCorrectly()
+        {
+            IRequestParameters? capturedWrapper = null;
+            var engineMock = new Mock<StrategyEngine>(_contextMock.Object) { CallBase = true };
+
+            // Capture the wrapper, don't execute the real method
+            engineMock
+                .Setup(e => e.ProcessRequest(It.IsAny<IRequestParameters>()))
+                .Callback<IRequestParameters>(p => capturedWrapper = p);
+
+            var sdkParams = new ModifyOrderRequestParameters
+            {
+                Quantity = 123,
+                Price = 5432,
+                OrderTypeId = OrderType.Limit,
+                Side = Side.Buy,
+            };
+
+            engineMock.Object.ProcessRequest(sdkParams);
+
+            // Verify hydration
+            Assert.NotNull(capturedWrapper);
+            Assert.IsType<ModifyOrderRequestParametersWrapper>(capturedWrapper);
+
+            var wrapper = (ModifyOrderRequestParametersWrapper)capturedWrapper;
+            Assert.Equal(123, wrapper.Quantity);
+            Assert.Equal(5432, wrapper.Price);
+            Assert.Equal(OrderType.Limit, wrapper.OrderTypeId);
+            Assert.Equal(Side.Buy, wrapper.Side);
         }
 
         [Fact]
@@ -407,7 +434,6 @@ namespace AutoSizeStrategy.Tests
 
             requestMock.SetupGet(r => r.RequestId).Returns(12345);
             requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
-            requestMock.SetupGet(r => r.AccountId).Returns(_accountMock.Object.Id);
             requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
             requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
             requestMock.SetupGet(r => r.OrderTypeId).Returns(OrderType.Limit);
@@ -556,7 +582,6 @@ namespace AutoSizeStrategy.Tests
             {
                 Quantity = quantity,
                 Account = _accountMock.Object,
-                AccountId = _accountMock.Object.Id,
                 Symbol = _symbolMock.Object,
                 Price = currentPrice,
                 StopLossItems = [slTpHolder],

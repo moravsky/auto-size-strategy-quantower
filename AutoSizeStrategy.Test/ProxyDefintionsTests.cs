@@ -1,5 +1,6 @@
 using System.Threading;
 using AutoSizeStrategy;
+using Moq;
 using TradingPlatform.BusinessLayer;
 using Xunit;
 
@@ -36,6 +37,56 @@ namespace AutoSizeStrategy.Test
 
             Assert.IsType<ModifyOrderRequestParametersWrapper>(result);
             Assert.NotNull(result as IModifyOrderRequestParameters);
+        }
+
+        [Fact]
+        public void FromModify_TransfersModifyData_Correctly()
+        {
+            var accMock = new Mock<IAccount>();
+            accMock.SetupGet(a => a.Id).Returns("RealAcc123");
+
+            var symMock = new Mock<ISymbol>();
+            symMock.SetupGet(s => s.Id).Returns("MES");
+
+            var modifyMock = new Mock<IModifyOrderRequestParameters>();
+            modifyMock.SetupGet(m => m.Account).Returns(accMock.Object);
+            modifyMock.SetupGet(m => m.Symbol).Returns(symMock.Object);
+            modifyMock.SetupGet(m => m.Side).Returns(Side.Buy);
+            modifyMock.SetupGet(m => m.Price).Returns(5000.0);
+            modifyMock.SetupGet(m => m.OrderTypeId).Returns(OrderType.Limit);
+            modifyMock.SetupGet(m => m.StopLossItems).Returns(new List<SlTpHolder>());
+
+            var result =
+                IPlaceOrderRequestParameters.FromModify(modifyMock.Object, 5.0)
+                as PlaceOrderRequestParametersWrapper;
+            Assert.NotNull(result);
+
+            // Verify the wrapper is fully hydrated
+            Assert.Equal(Side.Buy, result.Side);
+            Assert.Equal(5000.0, result.Price);
+            Assert.Equal(5.0, result.Quantity);
+            Assert.Equal(OrderType.Limit, result.OrderTypeId);
+            Assert.Same(accMock.Object, result.Account);
+            Assert.Same(symMock.Object, result.Symbol);
+
+            Assert.Equal(Side.Buy, result.Inner.Side);
+            Assert.Equal(5000.0, result.Inner.Price);
+            Assert.Equal(5.0, result.Inner.Quantity);
+            Assert.Equal("Limit", result.Inner.OrderTypeId);
+        }
+
+        [Fact]
+        public void OrderRequestParametersWrapper_SyncsToInner()
+        {
+            // Verify that setting a wrapper property updates the underlying SDK object
+            var inner = new PlaceOrderRequestParameters();
+            var wrapper = new PlaceOrderRequestParametersWrapper(inner);
+
+            wrapper.Quantity = 42;
+            wrapper.Price = 1234.5;
+
+            Assert.Equal(42, inner.Quantity); // Verifies proxying to Inner
+            Assert.Equal(1234.5, inner.Price);
         }
     }
 }
