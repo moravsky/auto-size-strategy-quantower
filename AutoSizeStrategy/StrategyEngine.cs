@@ -230,7 +230,7 @@ namespace AutoSizeStrategy
                     }
 
                     context.Logger.LogInfo($"Cancelling order {order.Id}: missing stop loss");
-                    context.TradingService.Cancel(order);
+                    context.TradingService.Cancel(order, useLeadingJitter: true);
                     return;
                 }
                 else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
@@ -262,7 +262,7 @@ namespace AutoSizeStrategy
                     $"Risk=0 for {account.Id}. Reason: {calculationReason}. Cancelling Order {order.Id}"
                 );
                 // If risk is 0, we can't trade.
-                context.TradingService.Cancel(order);
+                context.TradingService.Cancel(order, useLeadingJitter: true);
                 return;
             }
 
@@ -293,7 +293,7 @@ namespace AutoSizeStrategy
                 context.Logger.LogInfo(
                     $"Cancelling Order {order.Id}. Size is {order.TotalQuantity}, must be {calculatedSize}."
                 );
-                context.TradingService.Cancel(order);
+                context.TradingService.Cancel(order, useLeadingJitter: true);
             }
         }
 

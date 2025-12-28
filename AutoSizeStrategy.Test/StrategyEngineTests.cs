@@ -486,7 +486,7 @@ namespace AutoSizeStrategy.Tests
             await _engine.ProcessFailSafe(order.Object);
 
             // Should NOT call Cancel
-            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>()), Times.Never);
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
         }
 
         [Fact]
@@ -512,7 +512,10 @@ namespace AutoSizeStrategy.Tests
                     ),
                 Times.Once
             );
-            _serviceMock.Verify(s => s.Cancel(It.Is<IOrder>(i => i.Id.Equals("456"))), Times.Once);
+            _serviceMock.Verify(
+                s => s.Cancel(It.Is<IOrder>(i => i.Id.Equals("456")), It.Is<bool>(b => b == true)),
+                Times.Once
+            );
         }
 
         [Fact]
@@ -545,7 +548,7 @@ namespace AutoSizeStrategy.Tests
             await _engine.ProcessFailSafe(order.Object);
 
             // Should NOT call Cancel
-            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>()), Times.Never);
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
         }
 
         [Fact]
@@ -566,7 +569,7 @@ namespace AutoSizeStrategy.Tests
             await _engine.ProcessFailSafe(order.Object);
 
             // Should NOT call Cancel
-            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>()), Times.Never);
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
         }
 
         #endregion

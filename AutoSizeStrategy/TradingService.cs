@@ -8,8 +8,8 @@ namespace AutoSizeStrategy
     public interface ITradingService : IDisposable
     {
         // TODO: Replace bool with rich result object
-        bool Cancel(IOrder order);
-        bool Place(IPlaceOrderRequestParameters parameters);
+        bool Cancel(IOrder order, bool useLeadingJitter = false);
+        bool Place(IPlaceOrderRequestParameters parameters, bool useLeadingJitter = false);
         bool CancelReplace(string originalOrderId, IPlaceOrderRequestParameters newParams);
         bool CancelReplace(IOrder originalOrder, IPlaceOrderRequestParameters newParams);
 
@@ -51,7 +51,7 @@ namespace AutoSizeStrategy
         private readonly TrackingSet<long> _pendingPlacements = new();
         private readonly Random _random = new();
 
-        public bool Place(IPlaceOrderRequestParameters parameters)
+        public bool Place(IPlaceOrderRequestParameters parameters, bool useLeadingJitter = false)
         {
             if (
                 !_pendingPlacements.TryTrack(
@@ -61,17 +61,21 @@ namespace AutoSizeStrategy
             )
                 return false;
 
+            var abortTask = _pendingPlacements.GetTask(parameters.RequestId);
+
             // Fire-and-forget the background retry loop to unblock the caller
             _ = ExecuteWithRetryAsync(
                 "PlaceRequest",
                 parameters.RequestId.ToString(),
-                () => Task.FromResult(parameters.Send())
+                () => Task.FromResult(parameters.Send()),
+                useLeadingJitter: useLeadingJitter,
+                opDone: _pendingPlacements.GetTask(parameters.RequestId)
             );
 
             return true;
         }
 
-        public bool Cancel(IOrder order)
+        public bool Cancel(IOrder order, bool useLeadingJitter = false)
         {
             if (
                 order.Status != OrderStatus.Opened
@@ -82,10 +86,13 @@ namespace AutoSizeStrategy
             )
                 return false;
 
+            var abortTask = _pendingCancels.GetTask(order.Id);
             _ = ExecuteWithRetryAsync(
                 "CancellOrder",
                 order.Id,
-                () => Task.FromResult(order.Cancel())
+                () => Task.FromResult(order.Cancel()),
+                useLeadingJitter: useLeadingJitter,
+                opDone: _pendingCancels.GetTask(order.Id)
             );
             return true;
         }
@@ -108,7 +115,7 @@ namespace AutoSizeStrategy
                 {
                     try
                     {
-                        if (!Cancel(originalOrder))
+                        if (!Cancel(originalOrder, useLeadingJitter: false))
                             return;
 
                         bool confirmed = await _pendingCancels.WaitAsync(
@@ -117,7 +124,7 @@ namespace AutoSizeStrategy
                         );
                         if (confirmed || originalOrder.Status == OrderStatus.Cancelled)
                         {
-                            Place(newParams);
+                            Place(newParams, useLeadingJitter: false);
                         }
                         else
                         {
@@ -138,21 +145,40 @@ namespace AutoSizeStrategy
         private async Task<TradingOperationResult> ExecuteWithRetryAsync(
             string name,
             string id,
-            Func<Task<TradingOperationResult>> op
+            Func<Task<TradingOperationResult>> op,
+            bool useLeadingJitter = false,
+            Task<bool> opDone = null
         )
         {
             int retryDelayMs = _tradingServiceSettings.InitialRetryDelayMs;
             for (int i = 0; i <= _tradingServiceSettings.MaxRetries; i++)
             {
+                if (opDone != null && opDone.IsCompleted)
+                {
+                    _logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
+                    return TradingOperationResult.CreateSuccess(0, id);
+                }
+
                 try
                 {
-                    await Task.Delay(
-                        _random.Next(
-                            _tradingServiceSettings.MinJitterMs,
-                            _tradingServiceSettings.MaxJitterMs
-                        ),
-                        _cts.Token
-                    );
+                    if (i > 0 || useLeadingJitter)
+                    {
+                        await Task.Delay(
+                            _random.Next(
+                                _tradingServiceSettings.MinJitterMs,
+                                _tradingServiceSettings.MaxJitterMs
+                            ),
+                            _cts.Token
+                        );
+                    }
+
+                    // Double-check after the jitter
+                    if (opDone != null && opDone.IsCompleted)
+                    {
+                        _logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
+                        return TradingOperationResult.CreateSuccess(0, id);
+                    }
+
                     var res = await op();
                     if (res?.Status == TradingOperationResultStatus.Success)
                         return res;
