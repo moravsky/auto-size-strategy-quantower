@@ -121,7 +121,7 @@ namespace AutoSizeStrategy
             try
             {
                 var orderWrapper = new OrderWrapper(order);
-                await Task.Run(() => strategyEngine.ProcessFailSafe(orderWrapper), cts.Token);
+                await Task.Run(() => strategyEngine.ProcessOrder(orderWrapper), cts.Token);
             }
             catch (OperationCanceledException)
             {
