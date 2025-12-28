@@ -74,12 +74,10 @@ namespace AutoSizeStrategy
             orderRequestParameters.OrderTypeId switch
             {
                 OrderType.Market => orderRequestParameters.Symbol.Last,
-                OrderType.Limit
-                or OrderType.StopLimit
-                or OrderType.LimitIfTouched
-                or OrderType.Stop
-                or OrderType.MarketIfTouched
-                or OrderType.TrailingStop => orderRequestParameters.Price,
+                OrderType.Limit or OrderType.StopLimit or OrderType.LimitIfTouched =>
+                    orderRequestParameters.Price,
+                OrderType.Stop or OrderType.MarketIfTouched or OrderType.TrailingStop =>
+                    orderRequestParameters.TriggerPrice,
                 _ => throw new NotSupportedException("Order type not supported"),
             };
 
