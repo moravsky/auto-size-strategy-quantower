@@ -194,7 +194,7 @@ namespace AutoSizeStrategy
             // TODO: V2: Add UX override for drawdown mode
         }
 
-        public async Task ProcessFailSafe(IOrder order)
+        public async Task ProcessOrder(IOrder order)
         {
             if (order.Status != OrderStatus.Opened)
                 return;

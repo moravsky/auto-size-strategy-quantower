@@ -468,10 +468,10 @@ namespace AutoSizeStrategy.Tests
 
         #endregion
 
-        #region ProcessFailSafe -------------------------------------------
+        #region ProcessOrder -------------------------------------------
 
         [Fact]
-        public async Task ProcessFailSafe_EntryRightSize_PassThrough()
+        public async Task ProcessOrder_EntryRightSize_PassThrough()
         {
             // Start with 20K balance
             _accountMock.SetupGet(a => a.Balance).Returns(10_000.0);
@@ -484,21 +484,21 @@ namespace AutoSizeStrategy.Tests
                 .SetupGet(o => o.StopLossItems)
                 .Returns([SlTpHolder.CreateSL(20, PriceMeasurement.Offset)]);
 
-            await _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessOrder(order.Object);
 
             // Should NOT call Cancel
             _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
         }
 
         [Fact]
-        public async Task ProcessFailSafe_Cancels_WhenQuantityMismatch()
+        public async Task ProcessOrder_Cancels_WhenQuantityMismatch()
         {
             var order = CreateMockOrder(id: "456", qty: 5);
             order
                 .SetupGet(o => o.StopLossItems)
                 .Returns([SlTpHolder.CreateSL(20, PriceMeasurement.Offset)]);
 
-            await _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessOrder(order.Object);
 
             // Correct size: 150K * 10% = 15K / 5$ per tick (incorrect MES) / 20 ticks = 150
             var calculatedSize = 150;
@@ -520,20 +520,20 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public async Task ProcessFailSafe_DoesNothing_WhenOrderClosed()
+        public async Task ProcessOrder_DoesNothing_WhenOrderClosed()
         {
             var order = new Mock<IOrder>();
             // Closed order – should skip
             order.SetupGet(o => o.Status).Returns(OrderStatus.Cancelled);
 
-            await _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessOrder(order.Object);
 
             _loggerMock.VerifyNoOtherCalls();
             order.VerifyGet(o => o.Status, Times.AtLeastOnce);
         }
 
         [Fact]
-        public async Task ProcessFailSafe_ReduceOnlyWrongSize_PassThrough()
+        public async Task ProcessOrder_ReduceOnlyWrongSize_PassThrough()
         {
             // Simulate a Short Position of -10 contracts
             _contextMock
@@ -546,7 +546,7 @@ namespace AutoSizeStrategy.Tests
             // Simulate that the size is "wrong" according to risk to ensure it would be cancelled if not reduce-only
             // (e.g. Risk calc might want 1 contract, but order is 5)
 
-            await _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessOrder(order.Object);
 
             // Should NOT call Cancel
             _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
@@ -557,7 +557,7 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public async Task ProcessFailSafe_ReduceOnlyNoStop_PassThrough()
+        public async Task ProcessOrder_ReduceOnlyNoStop_PassThrough()
         {
             // Simulate a Short Position of -10 contracts
             _contextMock
@@ -569,7 +569,7 @@ namespace AutoSizeStrategy.Tests
             order.SetupGet(o => o.Side).Returns(Side.Buy);
             order.SetupGet(o => o.StopLossItems).Returns([]);
 
-            await _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessOrder(order.Object);
 
             // Should NOT call Cancel
             _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
@@ -580,7 +580,7 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public async Task ProcessFailSafe_NoStopIgnore_PassThrough()
+        public async Task ProcessOrder_NoStopIgnore_PassThrough()
         {
             // Simulate a Short Position of -10 contracts
             _contextMock
@@ -595,7 +595,7 @@ namespace AutoSizeStrategy.Tests
             order.SetupGet(o => o.Side).Returns(Side.Sell);
             order.SetupGet(o => o.StopLossItems).Returns([]);
 
-            await _engine.ProcessFailSafe(order.Object);
+            await _engine.ProcessOrder(order.Object);
 
             // Should NOT call Cancel
             _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
