@@ -53,13 +53,13 @@ namespace AutoSizeStrategy
                 return;
             }
 
-            // Check for Reduce-Only
+            // Check for exit
             double netPosition = context.GetNetPositionQuantity(
                 orderRequestParameters.Account,
                 orderRequestParameters.Symbol
             );
 
-            if (orderRequestParameters.IsReduceOnlyForPosition(netPosition))
+            if (orderRequestParameters.IsExitForPosition(netPosition))
             {
                 context.Logger.LogInfo(
                     $"Passing through exit request {orderRequestParameters.RequestId} (NetPos: {netPosition}) unchanged."
@@ -220,9 +220,10 @@ namespace AutoSizeStrategy
             {
                 if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
                 {
-                    // Check for Reduce-Only
-                    bool isReduceOnly = await order.IsReduceOnlyAsync(context);
-                    if (isReduceOnly)
+                    // Check for exit
+    
+                    bool isExit = await order.IsExitAsync(context);
+                    if (isExit)
                     {
                         context.Logger.LogInfo($"Passing exit order {order.Id} through unchanged");
                         return;
