@@ -182,6 +182,7 @@ namespace AutoSizeStrategy
         IAccount Account { get; }
         ISymbol Symbol { get; }
         double Price { get; set; }
+        double TriggerPrice { get; set; }
         Side Side { get; set; }
         List<SlTpHolder> StopLossItems { get; set; }
         List<SlTpHolder> TakeProfitItems { get; set; }
@@ -210,6 +211,7 @@ namespace AutoSizeStrategy
                 Symbol = modify.Symbol,
                 Side = modify.Side,
                 Price = modify.Price,
+                TriggerPrice = modify.TriggerPrice,
                 OrderTypeId = modify.OrderTypeId,
                 Quantity = newQuantity,
                 StopLossItems = modify.StopLossItems?.ToList(), // Clone the list to avoid side effects
@@ -272,6 +274,12 @@ namespace AutoSizeStrategy
         {
             get => Inner.Price;
             set => Inner.Price = value;
+        }
+
+        public double TriggerPrice
+        {
+            get => Inner.TriggerPrice;
+            set => Inner.TriggerPrice = value;
         }
 
         public Side Side

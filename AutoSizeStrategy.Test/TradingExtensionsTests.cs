@@ -119,12 +119,6 @@ namespace AutoSizeStrategy.Tests
                 { OrderType.StopLimit, 4990.0, 5000.0, 4990.0 },
                 // LimitIfTouched orders use the specified Price
                 { OrderType.LimitIfTouched, 4985.0, 5000.0, 4985.0 },
-                // Stop orders use the specified Price (for requests)
-                { OrderType.Stop, 4980.0, 5000.0, 4980.0 },
-                // MarketIfTouched orders use the specified Price (for requests)
-                { OrderType.MarketIfTouched, 4975.0, 5000.0, 4975.0 },
-                // TrailingStop orders use the specified Price (for requests)
-                { OrderType.TrailingStop, 4970.0, 5000.0, 4970.0 },
             };
 
         [Theory]
@@ -142,6 +136,51 @@ namespace AutoSizeStrategy.Tests
             var requestMock = new Mock<IOrderRequestParameters>();
             requestMock.SetupGet(r => r.OrderTypeId).Returns(orderTypeId);
             requestMock.SetupGet(r => r.Price).Returns(price);
+            requestMock.SetupGet(r => r.Symbol).Returns(symbolMock.Object);
+
+            double result = requestMock.Object.GetLikelyFillPrice();
+
+            Assert.Equal(expectedFillPrice, result, precision: 6);
+        }
+
+        public static TheoryData<
+            string,
+            double,
+            double,
+            double,
+            double
+        > TriggerPriceOrderRequestScenarios =>
+            new()
+            {
+                // orderTypeId, price, triggerPrice, lastPrice, expectedFillPrice
+                // Stop orders use TriggerPrice (price may be NaN)
+                { OrderType.Stop, double.NaN, 4980.0, 5000.0, 4980.0 },
+                { OrderType.Stop, 0.0, 4980.0, 5000.0, 4980.0 },
+                // MarketIfTouched orders use TriggerPrice
+                { OrderType.MarketIfTouched, double.NaN, 4975.0, 5000.0, 4975.0 },
+                { OrderType.MarketIfTouched, 0.0, 4975.0, 5000.0, 4975.0 },
+                // TrailingStop orders use TriggerPrice
+                { OrderType.TrailingStop, double.NaN, 4970.0, 5000.0, 4970.0 },
+                { OrderType.TrailingStop, 0.0, 4970.0, 5000.0, 4970.0 },
+            };
+
+        [Theory]
+        [MemberData(nameof(TriggerPriceOrderRequestScenarios))]
+        public void GetLikelyFillPrice_TriggerPriceOrders_UsesTriggerPrice(
+            string orderTypeId,
+            double price,
+            double triggerPrice,
+            double lastPrice,
+            double expectedFillPrice
+        )
+        {
+            var symbolMock = new Mock<ISymbol>();
+            symbolMock.SetupGet(s => s.Last).Returns(lastPrice);
+
+            var requestMock = new Mock<IOrderRequestParameters>();
+            requestMock.SetupGet(r => r.OrderTypeId).Returns(orderTypeId);
+            requestMock.SetupGet(r => r.Price).Returns(price);
+            requestMock.SetupGet(r => r.TriggerPrice).Returns(triggerPrice);
             requestMock.SetupGet(r => r.Symbol).Returns(symbolMock.Object);
 
             double result = requestMock.Object.GetLikelyFillPrice();
@@ -240,11 +279,9 @@ namespace AutoSizeStrategy.Tests
                 new("Sim555"), // Priority 2 (Static)
             };
 
-            // Act
             // We use the generic method, telling it that 'Id' is the identifier
             var result = accounts.FindTargetAccount();
 
-            // Assert
             Assert.Equal("TPPRO123", result.Id);
         }
 
