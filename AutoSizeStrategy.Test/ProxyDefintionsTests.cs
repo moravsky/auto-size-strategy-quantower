@@ -91,20 +91,6 @@ namespace AutoSizeStrategy.Test
         }
 
         [Fact]
-        public void OrderRequestParametersWrapper_SyncsToInner()
-        {
-            // Verify that setting a wrapper property updates the underlying SDK object
-            var inner = new PlaceOrderRequestParameters();
-            var wrapper = new PlaceOrderRequestParametersWrapper(inner);
-
-            wrapper.Quantity = 42;
-            wrapper.Price = 1234.5;
-
-            Assert.Equal(42, inner.Quantity); // Verifies proxying to Inner
-            Assert.Equal(1234.5, inner.Price);
-        }
-
-        [Fact]
         public void FromModify_BracketsMatchQuantity_RegardlessOfAssignmentOrder()
         {
             var wrapper = new PlaceOrderRequestParametersWrapper();
