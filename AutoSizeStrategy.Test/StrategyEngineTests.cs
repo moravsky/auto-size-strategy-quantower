@@ -198,7 +198,7 @@ namespace AutoSizeStrategy.Tests
 
             // Verify Log
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("is Reduce-Only"))),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Passing through exit request"))),
                 Times.Once
             );
         }
@@ -223,7 +223,7 @@ namespace AutoSizeStrategy.Tests
 
             // Verify Log
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("is Reduce-Only"))),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Passing through exit request"))),
                 Times.Once
             );
         }
@@ -436,6 +436,7 @@ namespace AutoSizeStrategy.Tests
             requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
             requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
             requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
+            requestMock.SetupGet(r => r.OrderId).Returns("order67");
             requestMock.SetupGet(r => r.OrderTypeId).Returns(OrderType.Limit);
 
             var slList = new List<SlTpHolder> { SlTpHolder.CreateSL(20, PriceMeasurement.Offset) };
@@ -460,7 +461,7 @@ namespace AutoSizeStrategy.Tests
             // Expected Replacement Size = 150 contracts.
 
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("Resizing modification"))),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("resizing order"))),
                 Times.Once
             );
         }
@@ -549,6 +550,10 @@ namespace AutoSizeStrategy.Tests
 
             // Should NOT call Cancel
             _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains($"Passing exit order"))),
+                Times.Once
+            );
         }
 
         [Fact]
@@ -563,13 +568,41 @@ namespace AutoSizeStrategy.Tests
             var order = CreateMockOrder("id_reduce", 5);
             order.SetupGet(o => o.Side).Returns(Side.Buy);
             order.SetupGet(o => o.StopLossItems).Returns([]);
-            // Simulate that the size is "wrong" according to risk to ensure it would be cancelled if not reduce-only
-            // (e.g. Risk calc might want 1 contract, but order is 5)
 
             await _engine.ProcessFailSafe(order.Object);
 
             // Should NOT call Cancel
             _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains($"Passing exit order"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public async Task ProcessFailSafe_NoStopIgnore_PassThrough()
+        {
+            // Simulate a Short Position of -10 contracts
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(-10.0);
+            _settingsMock
+                .SetupGet(s => s.MissingStopLossAction)
+                .Returns(MissingStopLossAction.Ignore);
+
+            // Create a Sell Order
+            var order = CreateMockOrder("id_reduce", 5);
+            order.SetupGet(o => o.Side).Returns(Side.Sell);
+            order.SetupGet(o => o.StopLossItems).Returns([]);
+
+            await _engine.ProcessFailSafe(order.Object);
+
+            // Should NOT call Cancel
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains($"Passing order"))),
+                Times.Once
+            );
         }
 
         #endregion

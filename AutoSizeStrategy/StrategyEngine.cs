@@ -62,7 +62,7 @@ namespace AutoSizeStrategy
             if (orderRequestParameters.IsReduceOnlyForPosition(netPosition))
             {
                 context.Logger.LogInfo(
-                    $"Request {orderRequestParameters.RequestId} is Reduce-Only (NetPos: {netPosition}) - passing through unchanged."
+                    $"Passing through exit request {orderRequestParameters.RequestId} (NetPos: {netPosition}) unchanged."
                 );
                 return;
             }
@@ -148,7 +148,8 @@ namespace AutoSizeStrategy
                     // If the new calculated size differs from the current order size
                     // we must Cancel-Replace to avoid broker "Modify refused" errors.
                     context.Logger.LogInfo(
-                        $"Resizing modification for {orderRequestParameters.RequestId}. Switching to Cancel-Replace."
+                        $"Request {modifyOrderRequestParameters.RequestId} resizing order {modifyOrderRequestParameters.OrderId}"
+                            + $" from {orderRequestParameters.Quantity} to {calculatedSize} via Cancel/Replace."
                     );
 
                     // Trigger the background orchestration
@@ -223,9 +224,7 @@ namespace AutoSizeStrategy
                     bool isReduceOnly = await order.IsReduceOnlyAsync(context);
                     if (isReduceOnly)
                     {
-                        context.Logger.LogInfo(
-                            $"Order {order.Id} is Reduce-Only - passing through unchanged"
-                        );
+                        context.Logger.LogInfo($"Passing exit order {order.Id} through unchanged");
                         return;
                     }
 
@@ -236,9 +235,15 @@ namespace AutoSizeStrategy
                 else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
                 {
                     context.Logger.LogInfo(
-                        $"Order {order.Id} has no stop loss - passing through unchanged"
+                        $"Passing order {order.Id} without stop loss through unchanged due to settings"
                     );
                     return;
+                }
+                else
+                {
+                    throw new NotSupportedException(
+                        $"Unsupported MissingStopLossAction: {context.Settings.MissingStopLossAction}"
+                    );
                 }
             }
 
