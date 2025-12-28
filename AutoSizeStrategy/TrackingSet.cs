@@ -85,6 +85,15 @@ namespace AutoSizeStrategy
             return TryRemove(key, out _);
         }
 
+        public Task<bool> GetTask(T key)
+        {
+            // If the item is tracked, return its completion task.
+            // If not, it's effectively "done" (either already removed or never started).
+            return _tracked.TryGetValue(key, out var expiration)
+                ? expiration.Completion.Task
+                : Task.FromResult(true);
+        }
+
         /// <summary>
         /// Current number of tracked items.
         /// </summary>
