@@ -11,8 +11,8 @@ namespace AutoSizeStrategy
         private const int DefaultRetryIntervalMs = 200;
         private const int DefaultMaxWaitMs = 2000;
 
-        // Determines if a side is reduce-only given a KNOWN net position.
-        public static bool IsReduceOnlyForPosition(this Side side, double netPosition)
+        // Determines if a side is exit given a KNOWN net position.
+        public static bool IsExitForPosition(this Side side, double netPosition)
         {
             if (netPosition > MathUtil.Epsilon)
                 return side == Side.Sell;
@@ -22,24 +22,24 @@ namespace AutoSizeStrategy
                 return false;
         }
 
-        // Determines if an order is reduce-only given a KNOWN net position.
-        public static bool IsReduceOnlyForPosition(this IOrder order, double netPosition)
+        // Determines if an order is exit given a KNOWN net position.
+        public static bool IsExitForPosition(this IOrder order, double netPosition)
         {
-            return order.Side.IsReduceOnlyForPosition(netPosition);
+            return order.Side.IsExitForPosition(netPosition);
         }
 
-        // Determines if a request is reduce-only given a KNOWN net position.
-        public static bool IsReduceOnlyForPosition(
+        // Determines if a request is exit given a KNOWN net position.
+        public static bool IsExitForPosition(
             this IOrderRequestParameters orderRequestParameters,
             double netPosition
         )
         {
-            return orderRequestParameters.Side.IsReduceOnlyForPosition(netPosition);
+            return orderRequestParameters.Side.IsExitForPosition(netPosition);
         }
 
-        // Determines if an order is Reduce-Only, handling potential race conditions
+        // Determines if an order is exit, handling potential race conditions
         // by polling the context until a position appears or timeout occurs.
-        public static async Task<bool> IsReduceOnlyAsync(
+        public static async Task<bool> IsExitAsync(
             this IOrder order,
             IStrategyContext context,
             TimeSpan? maxWait = null,
@@ -56,7 +56,7 @@ namespace AutoSizeStrategy
 
                 if (Math.Abs(netPos) > MathUtil.Epsilon)
                 {
-                    return order.IsReduceOnlyForPosition(netPos);
+                    return order.IsExitForPosition(netPos);
                 }
 
                 if (DateTime.UtcNow >= deadline)
