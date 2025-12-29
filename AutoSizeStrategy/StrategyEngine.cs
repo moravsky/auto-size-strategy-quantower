@@ -32,14 +32,14 @@ namespace AutoSizeStrategy
             if (requestParameters is not IOrderRequestParameters orderRequestParameters)
                 return;
 
-            if (context.Settings.TargetAccount == null)
+            if (context.Settings.CurrentAccount == null)
             {
                 context.Logger.LogError($"Target account not set, cannot continue");
                 return;
             }
 
             // Check account filter
-            if (context.Settings.TargetAccount.Id != orderRequestParameters.Account.Id)
+            if (context.Settings.CurrentAccount.Id != orderRequestParameters.Account.Id)
             {
                 return;
             }
@@ -208,14 +208,14 @@ namespace AutoSizeStrategy
             if (order.Status != OrderStatus.Opened)
                 return;
 
-            if (context.Settings.TargetAccount == null)
+            if (context.Settings.CurrentAccount == null)
             {
                 context.Logger.LogError($"Target account not set, cannot continue");
                 return;
             }
 
             // Check account filter
-            if (context.Settings.TargetAccount.Id != order.Account.Id)
+            if (context.Settings.CurrentAccount.Id != order.Account.Id)
             {
                 return;
             }
