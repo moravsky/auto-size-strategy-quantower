@@ -54,8 +54,10 @@ namespace AutoSizeStrategy
             var context = new StrategyContext(this);
             this.strategyEngine = new StrategyEngine(context);
 
-            Core.OrderAdded += OnOrderAdded;
             Core.NewRequest += this.CoreNewRequest;
+            Core.NewPerformedRequest += this.CoreNewPerformedRequest;
+
+            Core.OrderAdded += OnOrderAdded;
             Core.OrderRemoved += this.CoreOrderRemoved;
         }
 
@@ -71,13 +73,26 @@ namespace AutoSizeStrategy
             }
         }
 
+        private void CoreNewPerformedRequest(object sender, RequestEventArgs e)
+        {
+            try
+            {
+                strategyEngine.ProcessRequest(e.RequestParameters);
+            }
+            catch (Exception ex)
+            {
+                LogError($"CoreNewPerformedRequest failed: {ex}");
+            }
+        }
+
         protected override void OnStop()
         {
             var cts = _shutdownCts;
             if (cts == null)
                 return;
-            Core.OrderAdded -= OnOrderAdded;
             Core.NewRequest -= this.CoreNewRequest;
+            Core.OrderAdded -= OnOrderAdded;
+            Core.NewPerformedRequest -= this.CoreNewPerformedRequest;
             Core.OrderRemoved -= this.CoreOrderRemoved;
 
             _shutdownCts.Cancel();
@@ -146,7 +161,7 @@ namespace AutoSizeStrategy
             // TODO: this is pretty complex and untestable, consider moving to StrategyEngine
             try
             {
-                await Task.Run(() => strategyEngine.ReportOrderRemoved(order.Id), cts.Token);
+                await Task.Run(() => strategyEngine.ReportCancelledOrder(order.Id), cts.Token);
             }
             catch (OperationCanceledException)
             {
