@@ -41,6 +41,7 @@ namespace AutoSizeStrategy.Tests
             _settingsMock
                 .SetupGet(s => s.MissingStopLossAction)
                 .Returns(MissingStopLossAction.Reject);
+            _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
 
             // Default Account (Sim)
             _accountMock.SetupGet(a => a.Id).Returns("SimDefault");
@@ -81,20 +82,6 @@ namespace AutoSizeStrategy.Tests
                 // 10% = $450. Stop $100/contract. Result = 4.
                 );
 
-                // END OF DAY SCENARIO (TPT)
-                // Uses 'AutoLiquidateThreshold', 'MinAccountBalance', and 'NetPnL'.
-                data.Add(
-                    "TPT987654", // accountId: Matches EOD Regex
-                    150_000, // balance
-                    new Dictionary<string, string>
-                    {
-                        { "AutoLiquidateThreshold", "4500" }, // Static Drawdown Size
-                        { "MinAccountBalance", "145500" }, // The Hard Floor
-                        { "NetPnL", "0" }, // Today's PnL
-                    },
-                    4 // expectedQty: Same math as above, but derived differently.
-                );
-
                 // STATIC SCENARIO (Personal/Sim)
                 // No Thresholds provided. Uses raw Balance.
                 data.Add(
@@ -131,7 +118,6 @@ namespace AutoSizeStrategy.Tests
             double expectedQty
         )
         {
-            // Arrange
             _accountMock.SetupGet(a => a.Id).Returns(accountId);
             _accountMock.SetupGet(a => a.Balance).Returns(balance);
             _accountMock.SetupGet(a => a.AdditionalInfo).Returns(additionalInfo);
@@ -139,11 +125,43 @@ namespace AutoSizeStrategy.Tests
             // Stop: 5 pts = 20 ticks. Value: 20 ticks * $5 = $100 risk per contract.
             var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
 
-            // Act
             _engine.ProcessRequest(request);
 
-            // Assert
             Assert.Equal(expectedQty, request.Quantity);
+        }
+
+        [Fact]
+        public void ProcessRequest_EOD_UsesOverride_WhenSet()
+        {
+            _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(147_966.0);
+            _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
+            _accountMock.SetupGet(a => a.Balance).Returns(151_438.25);
+            _accountMock.SetupGet(a => a.AdditionalInfo).Returns(new Dictionary<string, string>());
+
+            // Available = 151438.25 - 147966 = 3472.25
+            // Risk 10% = 347.225
+            // Stop 20 ticks * $5 = $100/contract
+            // Size = 347.225 / 100 = 3.47 -> 3
+            var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
+
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(3, request.Quantity);
+        }
+
+        [Fact]
+        public void ProcessRequest_EOD_NoOverride_ReturnsZero()
+        {
+            _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
+            _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
+            _accountMock.SetupGet(a => a.Balance).Returns(151_438.25);
+            _accountMock.SetupGet(a => a.AdditionalInfo).Returns(new Dictionary<string, string>());
+
+            var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
+
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(0, request.Quantity);
         }
 
         #endregion

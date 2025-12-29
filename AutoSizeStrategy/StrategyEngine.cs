@@ -103,7 +103,8 @@ namespace AutoSizeStrategy
                 account,
                 context.Settings.RiskPercent,
                 drawdownMode,
-                out calculationReason
+                out calculationReason,
+                minAccountBalanceOverride: context.Settings.MinAccountBalanceOverride
             );
             if (riskCapital <= 0)
             {
@@ -268,7 +269,8 @@ namespace AutoSizeStrategy
                 account,
                 context.Settings.RiskPercent,
                 drawdownMode,
-                out calculationReason
+                out calculationReason,
+                minAccountBalanceOverride: context.Settings.MinAccountBalanceOverride
             );
             if (riskCapital <= 0)
             {

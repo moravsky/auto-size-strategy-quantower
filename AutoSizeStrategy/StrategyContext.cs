@@ -22,6 +22,7 @@ namespace AutoSizeStrategy
         IAccount TargetAccount { get; }
         double RiskPercent { get; }
         MissingStopLossAction MissingStopLossAction { get; }
+        double MinAccountBalanceOverride { get; }
     }
 
     public interface IStrategyContext : IDisposable

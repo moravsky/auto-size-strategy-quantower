@@ -136,10 +136,12 @@ namespace AutoSizeStrategy
             IAccount account,
             double riskPercent,
             DrawdownMode mode,
-            out string reason
+            out string reason,
+            double minAccountBalanceOverride = 0.0
         )
         {
             MathUtil.ValidateFinite(riskPercent, nameof(riskPercent));
+            MathUtil.ValidateFinite(minAccountBalanceOverride, nameof(minAccountBalanceOverride));
             ArgumentNullException.ThrowIfNull(account);
 
             if (riskPercent <= 0 || riskPercent > 100)
@@ -150,60 +152,42 @@ namespace AutoSizeStrategy
 
             double availableDrawdown = 0;
             reason = "";
-            switch (mode)
+            if (minAccountBalanceOverride > 0)
             {
-                case DrawdownMode.Static:
-                    availableDrawdown = account.Balance;
-                    break;
-                case DrawdownMode.Intraday:
-                    if (
-                        !TryGetInfoDouble(
-                            account,
-                            "AutoLiquidateThresholdCurrentValue",
-                            out double autoLiqCurrent
+                reason =
+                    $"Using minAccountBalanceOverride={minAccountBalanceOverride} for drawdown calculation";
+                availableDrawdown = account.Balance - minAccountBalanceOverride;
+            }
+            else
+            {
+                switch (mode)
+                {
+                    case DrawdownMode.Static:
+                        availableDrawdown = account.Balance;
+                        break;
+                    case DrawdownMode.Intraday:
+                        if (
+                            !TryGetInfoDouble(
+                                account,
+                                "AutoLiquidateThresholdCurrentValue",
+                                out double autoLiqCurrent
+                            )
                         )
-                    )
-                    {
-                        reason = "Missing 'AutoLiquidateThresholdCurrentValue' in Account Info";
+                        {
+                            reason = "Missing 'AutoLiquidateThresholdCurrentValue' in Account Info";
+                            return 0; // FAIL SAFE
+                        }
+                        availableDrawdown = account.Balance - autoLiqCurrent;
+                        break;
+                    case DrawdownMode.EndOfDay:
+                        reason = "EOD mode requires 'Minimum Account Balance (Override)' to be set";
                         return 0; // FAIL SAFE
-                    }
-                    availableDrawdown = account.Balance - autoLiqCurrent;
-                    break;
-                case DrawdownMode.EndOfDay:
-                    if (
-                        !TryGetInfoDouble(
-                            account,
-                            "AutoLiquidateThreshold",
-                            out double drawdownSize
-                        )
-                    )
-                    {
-                        reason = "Missing 'AutoLiquidateThreshold' (Drawdown Size)";
-                        return 0;
-                    }
-                    if (!TryGetInfoDouble(account, "MinAccountBalance", out double minBalance))
-                    {
-                        reason = "Missing 'MinAccountBalance'";
-                        return 0;
-                    }
-                    if (!TryGetInfoDouble(account, "NetPnL", out double netPnl))
-                    {
-                        reason = "Missing 'NetPnL' from the broker, assume it's 0";
-                        netPnl = 0;
-                    }
-                    // Risk budget is the lesser of:
-                    // 1. Distance to the hard floor (Balance - MinBalance)
-                    // 2. Daily Budget (DrawdownSize + NetPnL)
-                    availableDrawdown = Math.Min(
-                        account.Balance - minBalance,
-                        drawdownSize + netPnl
-                    );
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(
-                        nameof(mode),
-                        "Unsupported drawdown mode."
-                    );
+                    default:
+                        throw new ArgumentOutOfRangeException(
+                            nameof(mode),
+                            "Unsupported drawdown mode."
+                        );
+                }
             }
 
             if (availableDrawdown <= 0)
