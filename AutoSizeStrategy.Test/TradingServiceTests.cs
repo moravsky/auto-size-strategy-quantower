@@ -168,6 +168,83 @@ namespace AutoSizeStrategy.Tests
             loggerMock.VerifyNoOtherCalls();
         }
 
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        public async Task Cancel_Aborts_WhenStatusChangesToCancelled(int openedReturns)
+        {
+            var tcs = new TaskCompletionSource();
+            var orderMock = new Mock<IOrder>();
+            orderMock.SetupGet(o => o.Id).Returns("RACE-CONDITION-ID");
+
+            var statusSetup = orderMock.SetupSequence(o => o.Status);
+            for (int i = 0; i < openedReturns; i++)
+                statusSetup.Returns(OrderStatus.Opened);
+            statusSetup.Returns(OrderStatus.Cancelled);
+
+            _loggerMock
+                .Setup(l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))))
+                .Callback(() => tcs.SetResult());
+
+            _service.Cancel(orderMock.Object, useLeadingJitter: true);
+
+            await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))),
+                Times.Once
+            );
+            orderMock.Verify(o => o.Cancel(), Times.Never);
+        }
+
+        [Fact]
+        public async Task Cancel_Aborts_WhenReportedCancelledImmediately()
+        {
+            var orderMock = new Mock<IOrder>();
+            orderMock.SetupGet(o => o.Id).Returns("IDEMPOTENT-ID");
+            orderMock.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
+
+            var tcs = new TaskCompletionSource();
+            _loggerMock
+                .Setup(l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))))
+                .Callback(() => tcs.SetResult());
+
+            // Simulate the platform event
+            _service.Cancel(orderMock.Object, useLeadingJitter: true);
+            _service.ReportCancelledOrder("IDEMPOTENT-ID");
+
+            // We wait for the "aborted" log message
+            await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            // Never called, because we reported order as cancelled before the background task had a chance to execute.
+            orderMock.Verify(o => o.Cancel(), Times.Never);
+
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public async Task Place_Aborts_WhenCancellationTokenSignaled()
+        {
+            var cancellationToken = new CancellationToken(canceled: true);
+            var requestMock = new Mock<IPlaceOrderRequestParameters>();
+            requestMock.SetupGet(r => r.RequestId).Returns(999L);
+            requestMock.SetupGet(r => r.CancellationToken).Returns(cancellationToken);
+
+            // Start Place
+            _service.Place(requestMock.Object, useLeadingJitter: true);
+
+            await Task.Delay(100); // Wait for the background task to start
+
+            requestMock.Verify(r => r.Send(), Times.Never);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))),
+                Times.Once
+            );
+        }
+
         public void Dispose() => _service.Dispose();
     }
 }

@@ -61,15 +61,15 @@ namespace AutoSizeStrategy
             )
                 return false;
 
-            var abortTask = _pendingPlacements.GetTask(parameters.RequestId);
-
             // Fire-and-forget the background retry loop to unblock the caller
             _ = ExecuteWithRetryAsync(
                 "PlaceRequest",
                 parameters.RequestId.ToString(),
                 () => Task.FromResult(parameters.Send()),
                 useLeadingJitter: useLeadingJitter,
-                opDone: _pendingPlacements.GetTask(parameters.RequestId)
+                shouldContinue: () =>
+                    _pendingPlacements.Contains(parameters.RequestId)
+                    && !parameters.CancellationToken.IsCancellationRequested
             );
 
             return true;
@@ -86,13 +86,13 @@ namespace AutoSizeStrategy
             )
                 return false;
 
-            var abortTask = _pendingCancels.GetTask(order.Id);
             _ = ExecuteWithRetryAsync(
                 "CancellOrder",
                 order.Id,
                 () => Task.FromResult(order.Cancel()),
                 useLeadingJitter: useLeadingJitter,
-                opDone: _pendingCancels.GetTask(order.Id)
+                shouldContinue: () =>
+                    _pendingCancels.Contains(order.Id) && order.Status != OrderStatus.Cancelled
             );
             return true;
         }
@@ -147,13 +147,13 @@ namespace AutoSizeStrategy
             string id,
             Func<Task<TradingOperationResult>> op,
             bool useLeadingJitter = false,
-            Task<bool> opDone = null
+            Func<bool> shouldContinue = null
         )
         {
             int retryDelayMs = _tradingServiceSettings.InitialRetryDelayMs;
             for (int i = 0; i <= _tradingServiceSettings.MaxRetries; i++)
             {
-                if (opDone != null && opDone.IsCompleted)
+                if (shouldContinue != null && !shouldContinue())
                 {
                     _logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
                     return TradingOperationResult.CreateSuccess(0, id);
@@ -173,7 +173,7 @@ namespace AutoSizeStrategy
                     }
 
                     // Double-check after the jitter
-                    if (opDone != null && opDone.IsCompleted)
+                    if (shouldContinue != null && !shouldContinue())
                     {
                         _logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
                         return TradingOperationResult.CreateSuccess(0, id);
