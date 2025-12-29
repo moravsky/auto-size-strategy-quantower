@@ -19,7 +19,7 @@ namespace AutoSizeStrategy
 
     public interface IStrategySettings
     {
-        IAccount TargetAccount { get; }
+        IAccount CurrentAccount { get; }
         double RiskPercent { get; }
         MissingStopLossAction MissingStopLossAction { get; }
         double MinAccountBalanceOverride { get; }

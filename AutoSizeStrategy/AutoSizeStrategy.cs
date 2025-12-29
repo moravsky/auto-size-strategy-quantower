@@ -7,17 +7,22 @@ using TradingPlatform.BusinessLayer.Utils;
 
 namespace AutoSizeStrategy
 {
-    public class AutoSizeStrategy : Strategy, IStrategyLogger, IStrategySettings, IDisposable
+    public class AutoSizeStrategy
+        : Strategy,
+            ICurrentAccount,
+            IStrategyLogger,
+            IStrategySettings,
+            IDisposable
     {
         private bool _disposed;
         private StrategyEngine strategyEngine;
         private CancellationTokenSource _shutdownCts;
 
-        [InputParameter("Target Account")]
-        public Account TargetAccount = Core.Accounts.FindTargetAccount();
+        [InputParameter("Account")]
+        public Account CurrentAccount { get; set; } = Core.Accounts.FindTargetAccount();
 
-        IAccount IStrategySettings.TargetAccount =>
-            TargetAccount != null ? new AccountWrapper(TargetAccount) : null;
+        IAccount IStrategySettings.CurrentAccount =>
+            CurrentAccount != null ? new AccountWrapper(CurrentAccount) : null;
 
         [InputParameter("Risk Percent", minimum: 1.0, maximum: 100.0, increment: 0.1)]
         public double RiskPercent { get; set; } = 10.0;
@@ -47,7 +52,7 @@ namespace AutoSizeStrategy
 
         protected override void OnRun()
         {
-            if (TargetAccount == null)
+            if (CurrentAccount == null)
             {
                 LogError("No target account configured - strategy cannot run");
                 return;

@@ -36,7 +36,7 @@ namespace AutoSizeStrategy.Tests
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(0);
 
-            _settingsMock.SetupGet(s => s.TargetAccount).Returns(_accountMock.Object);
+            _settingsMock.SetupGet(s => s.CurrentAccount).Returns(_accountMock.Object);
             _settingsMock.SetupGet(s => s.RiskPercent).Returns(10.0);
             _settingsMock
                 .SetupGet(s => s.MissingStopLossAction)
