@@ -172,7 +172,15 @@ namespace AutoSizeStrategy
             orderRequestParameters.Quantity = calculatedSize;
         }
 
-        public void ReportOrderRemoved(string orderId)
+        public void ReportCompletedRequest(RequestParameters requestParameters)
+        {
+            if (requestParameters is PlaceOrderRequestParameters placeOrderRequestParameters)
+            {
+                context.TradingService.ReportPlacedOrder(placeOrderRequestParameters.RequestId);
+            }
+        }
+
+        public void ReportCancelledOrder(string orderId)
         {
             context.TradingService.ReportCancelledOrder(orderId);
         }
@@ -221,7 +229,7 @@ namespace AutoSizeStrategy
                 if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
                 {
                     // Check for exit
-    
+
                     bool isExit = await order.IsExitAsync(context);
                     if (isExit)
                     {
