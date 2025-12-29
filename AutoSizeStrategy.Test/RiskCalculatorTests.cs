@@ -1,4 +1,3 @@
-// AutoSizeStrategy.Test\RiskCalculatorTests.cs
 using System;
 using AutoSizeStrategy;
 using Moq;
@@ -7,9 +6,6 @@ using Xunit;
 
 namespace AutoSizeStrategy.Test
 {
-    /// <summary>
-    /// Unit tests for <see cref="RiskCalculator"/>.
-    /// </summary>
     public class RiskCalculatorTests
     {
         #region CalculatePositionSize
@@ -347,86 +343,45 @@ namespace AutoSizeStrategy.Test
         }
 
         [Theory]
-        // FRESH START (Happy Path)
-        // Balance 150k. PnL 0. Buffer 4500. Risk 10%.
-        // Result: Min(150k-145.5k, 4500+0) = 4500. Risk = 450.
-        [InlineData(150_000, 0, 450.0)]
-        // #WINNING (Buffer Expands)
-        // We made $1000. Balance is up to 151k.
-        // Available = DrawdownSize(4500) + PnL(1000) = 5500.
-        // Hard Floor check: 151k - 145.5k = 5500.
-        // Result: 5500. Risk = 550.
-        [InlineData(151_000, 1000, 550.0)]
-        // LOSING DAY (Buffer Contracts)
-        // We lost $1000. Balance is down to 149k.
-        // Available = DrawdownSize(4500) + PnL(-1000) = 3500.
-        // Hard Floor check: 149k - 145.5k = 3500.
-        // Result: 3500. Risk = 350.
-        [InlineData(149_000, -1000, 350.0)]
-        // THE "HARD FLOOR" TRAP (Yesterday was bad)
-        // Balance is 146,000 (we lost 4k yesterday). Today PnL is 0.
-        // Buffer says: 4500 + 0 = 4500 allowed? NO!
-        // Hard Floor says: 146,000 - 145,500 = only 500 allowed.
-        // Logic must choose the smaller (500). Risk = 50.
-        [InlineData(146_000, 0, 50.0)]
-        // RECOVERY MODE (Winning after a bad drawdown)
-        // Balance 146,500. We made $500 today.
-        // Hard Floor: 146.5k - 145.5k = 1000.
-        // Buffer: 4500 + 500 = 5000.
-        // Restult: Limited by Hard Floor (1000). Risk = 100.
-        [InlineData(146_500, 500, 100.0)]
-        public void CalculateRiskCapital_EndOfDay_Scenarios(
+        [InlineData(151_438.25, 147_966.0, 347.225)]
+        [InlineData(150_000, 145_500, 450.0)]
+        [InlineData(152_000, 147_500, 450.0)]
+        [InlineData(146_000, 145_500, 50.0)]
+        [InlineData(145_510, 145_500, 1.0)]
+        public void CalculateRiskCapital_EndOfDay_WithOverride_CalculatesCorrectly(
             double balance,
-            double netPnl,
+            double minBalanceOverride,
             double expectedRisk
         )
         {
-            var account = CreateAccount(
-                balance,
-                new Dictionary<string, string>
-                {
-                    { "AutoLiquidateThreshold", "4500" },
-                    { "MinAccountBalance", "145500" },
-                    { "NetPnL", netPnl.ToString() },
-                }
-            );
+            var account = CreateAccount(balance);
 
             double riskCapital = RiskCalculator.CalculateRiskCapital(
                 account,
                 riskPercent: 10.0,
                 DrawdownMode.EndOfDay,
-                out string reason
+                out string reason,
+                minAccountBalanceOverride: minBalanceOverride
             );
 
-            Assert.Equal(expectedRisk, riskCapital, precision: 4);
-            Assert.Contains("OK", reason);
+            Assert.Equal(expectedRisk, riskCapital, precision: 2);
         }
 
         [Fact]
-        public void CalculateRiskCapital_EOD_MissingPnL_DefaultsToZero()
+        public void CalculateRiskCapital_EOD_NoOverride_ReturnsZero()
         {
-            // Account has Balance & Thresholds, but NO NetPnL
-            var account = CreateAccount(
-                150_000,
-                new Dictionary<string, string>
-                {
-                    { "AutoLiquidateThreshold", "4500" },
-                    { "MinAccountBalance", "145500" },
-                    // "NetPnL" is missing
-                }
-            );
+            var account = CreateAccount(150_000);
 
             double riskCapital = RiskCalculator.CalculateRiskCapital(
                 account,
                 riskPercent: 10.0,
                 DrawdownMode.EndOfDay,
-                out string reason
+                out string reason,
+                minAccountBalanceOverride: 0.0
             );
 
-            // Should behave like PnL is 0.
-            // Risk = 10% of 4500 = 450.
-            Assert.Equal(450.0, riskCapital);
-            Assert.Contains("Missing 'NetPnL'", reason);
+            Assert.Equal(0, riskCapital);
+            Assert.Contains("requires", reason);
         }
 
         [Fact]
@@ -435,27 +390,17 @@ namespace AutoSizeStrategy.Test
             var rnd = new Random(123);
             for (int i = 0; i < 1000; i++)
             {
-                // Generate random (sometimes wild) account states
                 double balance = rnd.Next(140_000, 160_000);
-                double pnl = rnd.Next(-10_000, 10_000);
+                double minBalance = rnd.Next(140_000, 150_000);
 
-                var account = CreateAccount(
-                    balance,
-                    new Dictionary<string, string>
-                    {
-                        { "AutoLiquidateThreshold", "4500" },
-                        { "MinAccountBalance", "145500" },
-                        { "NetPnL", pnl.ToString() },
-                    }
-                );
+                var account = CreateAccount(balance);
 
-                // We just want to ensure this never throws an exception
-                // and returns a non-negative number
                 var risk = RiskCalculator.CalculateRiskCapital(
                     account,
                     10,
                     DrawdownMode.EndOfDay,
-                    out _
+                    out _,
+                    minAccountBalanceOverride: minBalance
                 );
 
                 Assert.True(risk >= 0, $"Failed on iteration {i}: Risk was negative ({risk})");

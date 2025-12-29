@@ -35,6 +35,9 @@ namespace AutoSizeStrategy
         public MissingStopLossAction MissingStopLossAction { get; set; } =
             MissingStopLossAction.Reject;
 
+        [InputParameter("Minimum Account Balance", minimum: 0.0, increment: .01)]
+        public double MinAccountBalanceOverride { get; set; } = 0.0;
+
         public AutoSizeStrategy()
         {
             this.Name = "AutoSizeStrategy42";
