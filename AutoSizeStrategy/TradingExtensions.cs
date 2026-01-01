@@ -91,6 +91,10 @@ namespace AutoSizeStrategy
                 _ => throw new NotSupportedException("Order type not supported"),
             };
 
+        public static bool InCancelSequence(this IOrder order) =>
+            !string.IsNullOrEmpty(order.OriginalStatus)
+            && order.OriginalStatus.Contains("cancel", StringComparison.InvariantCultureIgnoreCase);
+
         // This accepts ANY object T, as long as it can find the 'id'.
         // We need this, because we cannot create SDK Account type.
         public static T FindTargetAccount<T>(this IEnumerable<T> accounts)

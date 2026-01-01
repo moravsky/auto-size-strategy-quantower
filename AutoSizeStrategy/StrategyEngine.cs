@@ -214,6 +214,12 @@ namespace AutoSizeStrategy
                 return;
             }
 
+            // Check if this order is just a mesage from Rithmic about cancellation
+            if (order.InCancelSequence())
+            {
+                return;
+            }
+
             // Check account filter
             if (context.Settings.CurrentAccount.Id != order.Account.Id)
             {
