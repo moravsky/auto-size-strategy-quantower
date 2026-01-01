@@ -32,10 +32,12 @@ namespace AutoSizeStrategy
         double TriggerPrice { get; }
         string OrderTypeId { get; init; }
         double TotalQuantity { get; }
+        string OriginalStatus { get; }
         OrderStatus Status { get; }
         SlTpHolder[] StopLossItems { get; }
         ISymbol Symbol { get; }
         Side Side { get; }
+        Order Inner { get; }
         TradingOperationResult Cancel();
         static IOrder Find(string orderId) =>
             Core.Instance.Orders.FirstOrDefault(o => o.Id == orderId) is Order inner
@@ -46,24 +48,17 @@ namespace AutoSizeStrategy
     public class OrderWrapper(Order order) : IOrder
     {
         public IAccount Account => new AccountWrapper(order.Account);
-
         public string Id => order.Id;
-
         public double Price => order.Price;
-
         public double TriggerPrice => order.TriggerPrice;
-
         public string OrderTypeId { get; init; } = order.OrderTypeId;
-
         public double TotalQuantity => order.TotalQuantity;
-
+        public string OriginalStatus => order.OriginalStatus;
         public OrderStatus Status => order.Status;
-
         public SlTpHolder[] StopLossItems => order.StopLossItems ?? [];
-
         public ISymbol Symbol => new SymbolWrapper(order.Symbol);
-
         public Side Side => order.Side;
+        public Order Inner => order; // For debugging only, use wrapper in code
 
         public TradingOperationResult Cancel() => order.Cancel();
     }

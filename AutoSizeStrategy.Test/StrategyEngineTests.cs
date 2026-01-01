@@ -623,6 +623,19 @@ namespace AutoSizeStrategy.Tests
             );
         }
 
+        [Theory]
+        [InlineData("cancellation requested by the user")]
+        [InlineData("cancellation accepted by gateway")]
+        public async Task ProcessOrder_CancellationSequence_PassThrough(string originalStatus)
+        {
+            var order = CreateMockOrder("id_cancel", 5);
+            order.SetupGet(o => o.OriginalStatus).Returns(originalStatus);
+
+            await _engine.ProcessOrder(order.Object);
+            // Should NOT call Cancel
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
+        }
+
         #endregion
 
         #region Helpers ---------------------------------------------------
