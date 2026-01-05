@@ -1,8 +1,10 @@
 # AutoSizeStrategy Manual E2E Testing Guide
 
+For minor releases do Part 1 on a replay connection and Part 2 on a live connection. For major releases do all testing on a live connection.
+
 ## Prerequisites
 
-1. Build the strategy in Debug or Release mode
+1. Build the strategy in Release mode
 2. Ensure DLL is copied to `C:\Quantower\Settings\Scripts\Strategies\AutoSizeStrategy`
 3. Have a chart with NQ/MNQ or similar futures symbol ready
 
@@ -18,7 +20,7 @@
 4. Go to **Strategies Manager → AutoSizeStrategy42**
 5. Configure:
    - Target Account: Select the Replay account
-   - Risk Percent: 10%
+   - Risk Percent: 2.5%
    - Missing Stop Loss Action: **Reject**
 6. Start the strategy
 
@@ -28,7 +30,7 @@
 
 | # | Test Case | Steps | Expected Result |
 |---|-----------|-------|-----------------|
-| A1 | Limit order with SL resizes | Place limit order (qty=1) with 20-tick SL via DOM | Order quantity changes to calculated size based on 10% risk |
+| A1 | Limit order with SL resizes | Place limit order (qty=1) with 20-tick SL via DOM | Order quantity changes to calculated size based on selected risk |
 | A2 | Market order with SL resizes | Place market order (qty=1) with 20-tick SL | Order fills at calculated size |
 | A3 | Stop order with SL resizes | Place stop order (qty=1) with 20-tick SL | Order placed at calculated size |
 | A4 | Large SL = smaller size | Place order with 100-tick SL | Size smaller than A1 (more risk per contract) |
@@ -52,9 +54,8 @@
 
 | # | Test Case | Steps | Expected Result |
 |---|-----------|-------|-----------------|
-| C1 | Exit order unchanged | Enter long position (2 contracts). Place sell order for 1 contract | Sell order passes through at qty=1, not resized. Log: "Passing through exit request" |
-| C2 | Full exit unchanged | With 2-contract long, sell 2 contracts | Passes through unchanged |
-| C3 | Exit without SL | With position open, place exit order without SL | Passes through (exits exempt from SL requirement) |
+| C1 | Exit order with SL unchanged | Enter long position (2 contracts). Place sell order for 1 contract | Sell order passes through at qty=1, not resized. Log: "Passing through exit request" |
+| C2 | Exit order without SL unchanged | With position open, place exit order without SL | Passes through (exits exempt from SL requirement) |
 
 ---
 
@@ -104,7 +105,7 @@
 | Account Pattern | Expected Mode | Verification |
 |-----------------|---------------|--------------|
 | `TPPRO123456` | Intraday | Uses `AutoLiquidateThresholdCurrentValue` from account info |
-| `TPT987654` | EndOfDay | Uses `AutoLiquidateThreshold` + `MinAccountBalance` + `NetPnL` |
+| `TPT987654` | EndOfDay | Uses `Minimum Account Balance` from strategy settings |
 | Other | Static | Uses 10% of total balance |
 
 **How to verify**: Check strategy logs for "Changed request X quantity from Y to Z" — correct sizing confirms the drawdown mode is working
@@ -115,8 +116,8 @@
 - Strategy running
 - Correct account selected
 - Correct risk percent selected
-- Correct SL tick size selected
 - Correct Missing Stop Loss Action selected
+- Correct SL tick size selected
 - Place test order with SL → verify resize in logs
 - Modify test order with SL → verify resize in logs
 - Place test order without SL → verify rejection

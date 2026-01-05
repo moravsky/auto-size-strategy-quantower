@@ -37,7 +37,7 @@ namespace AutoSizeStrategy
         SlTpHolder[] StopLossItems { get; }
         ISymbol Symbol { get; }
         Side Side { get; }
-        Order Inner { get; }
+        Order Inner { get; } // For debugging only, use wrapper in code
         TradingOperationResult Cancel();
         static IOrder Find(string orderId) =>
             Core.Instance.Orders.FirstOrDefault(o => o.Id == orderId) is Order inner

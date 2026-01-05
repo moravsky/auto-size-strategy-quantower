@@ -236,7 +236,6 @@ namespace AutoSizeStrategy
                 if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
                 {
                     // Check for exit
-
                     bool isExit = await order.IsExitAsync(context);
                     if (isExit)
                     {
