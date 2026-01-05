@@ -230,19 +230,19 @@ namespace AutoSizeStrategy
             if (!_processedOrders.TryTrack(order.Id))
                 return;
 
+            // Check for exit
+            bool isExit = await order.IsExitAsync(context);
+            if (isExit)
+            {
+                context.Logger.LogInfo($"Passing exit order {order.Id} through unchanged");
+                return;
+            }
+
             // Check for stop loss
             if (order.StopLossItems.Length == 0)
             {
                 if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
                 {
-                    // Check for exit
-                    bool isExit = await order.IsExitAsync(context);
-                    if (isExit)
-                    {
-                        context.Logger.LogInfo($"Passing exit order {order.Id} through unchanged");
-                        return;
-                    }
-
                     context.Logger.LogInfo($"Cancelling order {order.Id}: missing stop loss");
                     context.TradingService.Cancel(order, useLeadingJitter: true);
                     return;
