@@ -146,6 +146,16 @@ namespace AutoSizeStrategy
             {
                 if (requestParameters is IModifyOrderRequestParameters modifyOrderRequestParameters)
                 {
+                    if (calculatedSize == 0)
+                    {
+                        context.Logger.LogInfo(
+                            $"Request {modifyOrderRequestParameters.RequestId}: SL too wide even for 1 contract, cancelling order {modifyOrderRequestParameters.OrderId}"
+                        );
+                        context.TradingService.Cancel(modifyOrderRequestParameters.OrderId);
+                        orderRequestParameters.Quantity = 0;
+                        return;
+                    }
+
                     // If the new calculated size differs from the current order size
                     // we must Cancel-Replace to avoid broker "Modify refused" errors.
                     context.Logger.LogInfo(

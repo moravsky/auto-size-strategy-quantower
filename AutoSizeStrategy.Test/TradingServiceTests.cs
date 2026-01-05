@@ -99,6 +99,7 @@ namespace AutoSizeStrategy.Tests
                 .Returns(TradingOperationResult.CreateSuccess(123, originalOrderId));
 
             var newParamsMock = new Mock<IPlaceOrderRequestParameters>();
+            newParamsMock.SetupGet(p => p.Quantity).Returns(67);
             newParamsMock.SetupGet(p => p.RequestId).Returns(newRequestId);
 
             // Signal the test thread the moment Send() is invoked
@@ -154,6 +155,34 @@ namespace AutoSizeStrategy.Tests
 
             // Verify the new order was never placed
             newParams.Verify(p => p.Send(), Times.Never);
+        }
+
+        [Fact]
+        public async Task CancelReplace_ZeroQuantity_CancelsButDoesNotPlace()
+        {
+            var cancelCalledTcs = new TaskCompletionSource<bool>();
+
+            var orderMock = new Mock<IOrder>();
+            orderMock.SetupGet(o => o.Id).Returns("order-zero-qty");
+            orderMock.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
+            orderMock
+                .Setup(o => o.Cancel())
+                .Callback(() => cancelCalledTcs.TrySetResult(true))
+                .Returns(TradingOperationResult.CreateSuccess(123, "order-zero-qty"));
+
+            var newParamsMock = new Mock<IPlaceOrderRequestParameters>();
+            newParamsMock.SetupGet(p => p.Quantity).Returns(0.0);
+            newParamsMock.SetupGet(p => p.RequestId).Returns(555L);
+
+            _service.CancelReplace(orderMock.Object, newParamsMock.Object);
+
+            await cancelCalledTcs.Task;
+            _service.ReportCancelledOrder("order-zero-qty");
+
+            await Task.Delay(500);
+
+            orderMock.Verify(o => o.Cancel(), Times.Once);
+            newParamsMock.Verify(p => p.Send(), Times.Never);
         }
 
         [Fact]
