@@ -636,6 +636,28 @@ namespace AutoSizeStrategy.Tests
             _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
         }
 
+        [Fact]
+        public async Task ProcessOrder_ExitWithStopLoss_PassThrough()
+        {
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(-10.0);
+
+            var order = CreateMockOrder("exit-with-sl", 5);
+            order.SetupGet(o => o.Side).Returns(Side.Buy);
+            order
+                .SetupGet(o => o.StopLossItems)
+                .Returns([SlTpHolder.CreateSL(20, PriceMeasurement.Offset)]);
+
+            await _engine.ProcessOrder(order.Object);
+
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Passing exit order"))),
+                Times.Once
+            );
+        }
+
         #endregion
 
         #region Helpers ---------------------------------------------------
