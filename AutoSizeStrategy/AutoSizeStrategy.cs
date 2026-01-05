@@ -24,7 +24,7 @@ namespace AutoSizeStrategy
         IAccount IStrategySettings.CurrentAccount =>
             CurrentAccount != null ? new AccountWrapper(CurrentAccount) : null;
 
-        [InputParameter("Risk Percent", minimum: 1.0, maximum: 100.0, increment: 0.1)]
+        [InputParameter("Risk Percent", minimum: 0.1, maximum: 100.0, increment: 0.1)]
         public double RiskPercent { get; set; } = 10.0;
 
         [InputParameter(
