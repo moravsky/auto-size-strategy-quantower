@@ -484,6 +484,47 @@ namespace AutoSizeStrategy.Tests
             );
         }
 
+        [Fact]
+        public void ProcessRequest_ModifyOrder_SLTooWide_CancelsWithoutReplace()
+        {
+            _accountMock.SetupGet(a => a.Id).Returns("Static");
+            _accountMock.SetupGet(a => a.Balance).Returns(100.0); // Tiny balance
+
+            var requestMock = new Mock<IModifyOrderRequestParameters>();
+            requestMock.SetupGet(r => r.RequestId).Returns(99999);
+            requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
+            requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
+            requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
+            requestMock.SetupGet(r => r.OrderId).Returns("order-to-cancel");
+            requestMock.SetupGet(r => r.OrderTypeId).Returns(OrderType.Limit);
+
+            // 500 tick SL = $2500 risk per contract, but only $10 budget (10% of $100)
+            var slList = new List<SlTpHolder> { SlTpHolder.CreateSL(500, PriceMeasurement.Offset) };
+            requestMock.SetupGet(r => r.StopLossItems).Returns(slList);
+            requestMock.SetupProperty(r => r.Quantity, 10.0);
+
+            _engine.ProcessRequest(requestMock.Object);
+
+            Assert.Equal(0, requestMock.Object.Quantity);
+            _serviceMock.Verify(
+                s => s.Cancel(It.Is<string>(id => id == "order-to-cancel")),
+                Times.Once
+            );
+            _serviceMock.Verify(
+                s => s.CancelReplace(It.IsAny<string>(), It.IsAny<IPlaceOrderRequestParameters>()),
+                Times.Never
+            );
+            _loggerMock.Verify(
+                l =>
+                    l.LogInfo(
+                        It.Is<string>(s =>
+                            s.Contains("SL too wide") && s.Contains("order-to-cancel")
+                        )
+                    ),
+                Times.Once
+            );
+        }
+
         #endregion
 
         #region ProcessOrder -------------------------------------------

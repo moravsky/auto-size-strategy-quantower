@@ -8,6 +8,7 @@ namespace AutoSizeStrategy
     public interface ITradingService : IDisposable
     {
         // TODO: Replace bool with rich result object
+        bool Cancel(string orderId);
         bool Cancel(IOrder order, bool useLeadingJitter = false);
         bool Place(IPlaceOrderRequestParameters parameters, bool useLeadingJitter = false);
         bool CancelReplace(string originalOrderId, IPlaceOrderRequestParameters newParams);
@@ -75,6 +76,19 @@ namespace AutoSizeStrategy
             return true;
         }
 
+        public bool Cancel(string orderId)
+        {
+            var order = IOrder.Find(orderId);
+            if (order == null)
+            {
+                return false;
+            }
+            else
+            {
+                return Cancel(order);
+            }
+        }
+
         public bool Cancel(IOrder order, bool useLeadingJitter = false)
         {
             if (
@@ -122,7 +136,10 @@ namespace AutoSizeStrategy
                             originalOrder.Id,
                             _tradingServiceSettings.CancelWaitMs
                         );
-                        if (confirmed || originalOrder.Status == OrderStatus.Cancelled)
+                        if (
+                            newParams.Quantity > MathUtil.Epsilon
+                            && (confirmed || originalOrder.Status == OrderStatus.Cancelled)
+                        )
                         {
                             Place(newParams, useLeadingJitter: false);
                         }
