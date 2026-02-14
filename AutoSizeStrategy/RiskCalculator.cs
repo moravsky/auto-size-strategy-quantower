@@ -130,28 +130,20 @@ namespace AutoSizeStrategy
             }
         }
 
-        /// Determines the amount of capital that can be risked based on the account balance,
-        /// previous EOD balance (for EOD accounts only) and the selected drawdown mode, then applies the risk percentage.
-        public static double CalculateRiskCapital(
+        // Raw dollar amount between current balance and the bust level.
+        public static double GetAvailableDrawdown(
             IAccount account,
-            double riskPercent,
             DrawdownMode mode,
             out string reason,
             double minAccountBalanceOverride = 0.0
         )
         {
-            MathUtil.ValidateFinite(riskPercent, nameof(riskPercent));
             MathUtil.ValidateFinite(minAccountBalanceOverride, nameof(minAccountBalanceOverride));
             ArgumentNullException.ThrowIfNull(account);
 
-            if (riskPercent <= 0 || riskPercent > 100)
-                throw new ArgumentException(
-                    "Risk percentage must be > 0 and <= 100.",
-                    nameof(riskPercent)
-                );
-
             double availableDrawdown = 0;
             reason = "";
+
             if (minAccountBalanceOverride > 0)
             {
                 reason =
@@ -203,11 +195,44 @@ namespace AutoSizeStrategy
                 reason = "Drawdown capped at Account Balance (Calculation exceeded balance)";
             }
 
-            double riskCapital = availableDrawdown * (riskPercent / 100.0);
             if (string.IsNullOrEmpty(reason))
             {
-                reason = $"OK Drawdown: {availableDrawdown:F2}, Risk: {riskCapital:F2}";
+                reason = $"OK Drawdown: {availableDrawdown:F2}";
             }
+
+            return availableDrawdown;
+        }
+
+        /// Determines the amount of capital that can be risked based on the account balance,
+        /// previous EOD balance (for EOD accounts only) and the selected drawdown mode, then applies the risk percentage.
+        public static double CalculateRiskCapital(
+            IAccount account,
+            double riskPercent,
+            DrawdownMode mode,
+            out string reason,
+            double minAccountBalanceOverride = 0.0
+        )
+        {
+            MathUtil.ValidateFinite(riskPercent, nameof(riskPercent));
+
+            if (riskPercent <= 0 || riskPercent > 100)
+                throw new ArgumentException(
+                    "Risk percentage must be > 0 and <= 100.",
+                    nameof(riskPercent)
+                );
+
+            double availableDrawdown = GetAvailableDrawdown(
+                account,
+                mode,
+                out reason,
+                minAccountBalanceOverride
+            );
+
+            if (availableDrawdown <= 0)
+                return 0;
+
+            double riskCapital = availableDrawdown * (riskPercent / 100.0);
+            reason = $"OK Drawdown: {availableDrawdown:F2}, Risk: {riskCapital:F2}";
             return riskCapital;
         }
 
