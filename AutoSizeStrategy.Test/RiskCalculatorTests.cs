@@ -458,6 +458,177 @@ namespace AutoSizeStrategy.Test
 
         #endregion
 
+        #region GetAvailableDrawdown
+
+        [Theory]
+        [InlineData(150_000, 150_000)]
+        [InlineData(10_000, 10_000)]
+        [InlineData(500, 500)]
+        public void Static_ReturnsFullBalance(double balance, double expectedDrawdown)
+        {
+            var account = CreateAccount(balance);
+
+            double result = RiskCalculator.GetAvailableDrawdown(
+                account,
+                DrawdownMode.Static,
+                out string reason
+            );
+
+            Assert.Equal(expectedDrawdown, result);
+            Assert.Contains("OK", reason);
+        }
+
+        [Theory]
+        [InlineData(150_000, 145_500, 4_500)]
+        [InlineData(152_000, 147_500, 4_500)]
+        [InlineData(146_000, 145_500, 500)]
+        [InlineData(145_510, 145_500, 10)]
+        public void Intraday_ReturnsBalanceMinusThreshold(
+            double balance,
+            double threshold,
+            double expectedDrawdown
+        )
+        {
+            var account = CreateAccount(
+                balance,
+                new Dictionary<string, string>
+                {
+                    { "AutoLiquidateThresholdCurrentValue", threshold.ToString() },
+                }
+            );
+
+            double result = RiskCalculator.GetAvailableDrawdown(
+                account,
+                DrawdownMode.Intraday,
+                out _
+            );
+
+            Assert.Equal(expectedDrawdown, result);
+        }
+
+        [Fact]
+        public void Intraday_MissingThreshold_ReturnsZero()
+        {
+            var account = CreateAccount(150_000, new Dictionary<string, string>());
+
+            double result = RiskCalculator.GetAvailableDrawdown(
+                account,
+                DrawdownMode.Intraday,
+                out string reason
+            );
+
+            Assert.Equal(0, result);
+            Assert.Contains("Missing", reason);
+        }
+
+        [Fact]
+        public void EOD_NoOverride_ReturnsZero()
+        {
+            var account = CreateAccount(150_000);
+
+            double result = RiskCalculator.GetAvailableDrawdown(
+                account,
+                DrawdownMode.EndOfDay,
+                out string reason
+            );
+
+            Assert.Equal(0, result);
+            Assert.Contains("requires", reason);
+        }
+
+        [Theory]
+        [InlineData(151_438.25, 147_966.0, 3472.25)]
+        [InlineData(150_000, 145_500, 4_500)]
+        public void EOD_WithOverride_ReturnsBalanceMinusOverride(
+            double balance,
+            double minOverride,
+            double expectedDrawdown
+        )
+        {
+            var account = CreateAccount(balance);
+
+            double result = RiskCalculator.GetAvailableDrawdown(
+                account,
+                DrawdownMode.EndOfDay,
+                out _,
+                minAccountBalanceOverride: minOverride
+            );
+
+            Assert.Equal(expectedDrawdown, result, precision: 2);
+        }
+
+        [Fact]
+        public void Override_TakesPrecedence_OverMode()
+        {
+            // Even for Static mode, override should be used when > 0
+            var account = CreateAccount(150_000);
+
+            double result = RiskCalculator.GetAvailableDrawdown(
+                account,
+                DrawdownMode.Static,
+                out _,
+                minAccountBalanceOverride: 145_000
+            );
+
+            Assert.Equal(5_000, result);
+        }
+
+        [Fact]
+        public void NegativeDrawdown_ReturnsZero()
+        {
+            // Balance below threshold
+            var account = CreateAccount(
+                144_000,
+                new Dictionary<string, string>
+                {
+                    { "AutoLiquidateThresholdCurrentValue", "145500" },
+                }
+            );
+
+            double result = RiskCalculator.GetAvailableDrawdown(
+                account,
+                DrawdownMode.Intraday,
+                out string reason
+            );
+
+            Assert.Equal(0, result);
+            Assert.Contains("zero or negative", reason);
+        }
+
+        [Fact]
+        public void NullAccount_Throws()
+        {
+            Assert.Throws<ArgumentNullException>(() =>
+                RiskCalculator.GetAvailableDrawdown(null, DrawdownMode.Static, out _)
+            );
+        }
+
+        [Fact]
+        public void CalculateRiskCapital_StillWorksAfterRefactor()
+        {
+            // Verify the existing API produces identical results after extraction
+            var account = CreateAccount(
+                150_000,
+                new Dictionary<string, string>
+                {
+                    { "AutoLiquidateThresholdCurrentValue", "145500" },
+                }
+            );
+
+            double riskCapital = RiskCalculator.CalculateRiskCapital(
+                account,
+                10.0,
+                DrawdownMode.Intraday,
+                out string reason
+            );
+
+            // Available = 4500. Risk 10% = 450.
+            Assert.Equal(450, riskCapital, precision: 4);
+            Assert.Contains("OK", reason);
+        }
+
+        #endregion
+
         private static IAccount CreateAccount(
             double balance,
             Dictionary<string, string>? additionalInfo = null
