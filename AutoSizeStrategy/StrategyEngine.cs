@@ -9,12 +9,6 @@ namespace AutoSizeStrategy
     // TODO: Run StrategyEngine on a backgroud thread to unblock UI during debugging
     public partial class StrategyEngine(IStrategyContext context) : IDisposable
     {
-        [GeneratedRegex(@"TPPRO\d+")]
-        public static partial Regex IntradayAccountPattern();
-
-        [GeneratedRegex(@"TPT\d+")]
-        public static partial Regex EndOfDayAccountPattern();
-
         private readonly TrackingSet<long> _processedRequests = new();
         private readonly TrackingSet<string> _processedOrders = new();
 
@@ -198,11 +192,11 @@ namespace AutoSizeStrategy
 
         private DrawdownMode InferDrawdownMode(string accountId)
         {
-            if (IntradayAccountPattern().IsMatch(accountId))
+            if (TradingExtensions.IntradayAccountPattern().IsMatch(accountId))
             {
                 return DrawdownMode.Intraday;
             }
-            else if (EndOfDayAccountPattern().IsMatch(accountId))
+            else if (TradingExtensions.EndOfDayAccountPattern().IsMatch(accountId))
             {
                 return DrawdownMode.EndOfDay;
             }
