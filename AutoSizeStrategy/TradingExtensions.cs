@@ -1,15 +1,35 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
-    public static class TradingExtensions
+    public static partial class TradingExtensions
     {
         private const int DefaultRetryIntervalMs = 200;
         private const int DefaultMaxWaitMs = 2000;
+
+        [GeneratedRegex(@"TPPRO\d+")]
+        public static partial Regex IntradayAccountPattern();
+
+        [GeneratedRegex(@"TPT\d+")]
+        public static partial Regex EndOfDayAccountPattern();
+
+        public static DrawdownMode InferDrawdownMode(this IAccount account)
+        {
+            ArgumentNullException.ThrowIfNull(account);
+
+            var id = account.Id;
+            if (IntradayAccountPattern().IsMatch(id))
+                return DrawdownMode.Intraday;
+            else if (EndOfDayAccountPattern().IsMatch(id))
+                return DrawdownMode.EndOfDay;
+            else
+                return DrawdownMode.Static;
+        }
 
         // Determines if a side is exit given a KNOWN net position.
         public static bool IsExitForPosition(this Side side, double netPosition)
@@ -112,9 +132,9 @@ namespace AutoSizeStrategy
                 return id switch
                 {
                     // Priority 0: TPT PRO Intraday
-                    var _ when StrategyEngine.IntradayAccountPattern().IsMatch(id) => 0,
+                    var _ when IntradayAccountPattern().IsMatch(id) => 0,
                     // Priority 1: TPT Eval EOD
-                    var _ when StrategyEngine.EndOfDayAccountPattern().IsMatch(id) => 1,
+                    var _ when EndOfDayAccountPattern().IsMatch(id) => 1,
                     // Priority 2: Everything else
                     _ => 2,
                 };

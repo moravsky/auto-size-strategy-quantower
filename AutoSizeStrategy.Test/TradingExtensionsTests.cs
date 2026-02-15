@@ -9,6 +9,22 @@ namespace AutoSizeStrategy.Tests
 {
     public class TradingExtensionsTests
     {
+        [Theory]
+        [InlineData("TPPRO123456", DrawdownMode.Intraday)]
+        [InlineData("TPPRO999", DrawdownMode.Intraday)]
+        [InlineData("TPT123456", DrawdownMode.EndOfDay)]
+        [InlineData("TPT888", DrawdownMode.EndOfDay)]
+        [InlineData("SimPersonal", DrawdownMode.Static)]
+        [InlineData("PersonalAccount", DrawdownMode.Static)]
+        [InlineData("Account (USD)", DrawdownMode.Static)]
+        public void InferDrawdownMode_ReturnsCorrectMode(string accountId, DrawdownMode expected)
+        {
+            var mock = new Mock<IAccount>();
+            mock.SetupGet(a => a.Id).Returns(accountId);
+
+            Assert.Equal(expected, mock.Object.InferDrawdownMode());
+        }
+
         public static TheoryData<double, Side, bool> ReduceOnlyScenarios =>
             new()
             {
