@@ -23,6 +23,11 @@ namespace AutoSizeStrategy
         double RiskPercent { get; }
         MissingStopLossAction MissingStopLossAction { get; }
         double MinAccountBalanceOverride { get; }
+        int MinimumStopLossTicks { get; }
+        double CommissionMicro { get; }
+        double CommissionMini { get; }
+        double AverageSlippageTicks { get; }
+        double ClutchModeTriggerPercent { get; }
     }
 
     public interface IStrategyContext : IDisposable
