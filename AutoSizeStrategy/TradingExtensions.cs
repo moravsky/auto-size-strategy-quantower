@@ -18,6 +18,16 @@ namespace AutoSizeStrategy
         [GeneratedRegex(@"TPT\d+")]
         public static partial Regex EndOfDayAccountPattern();
 
+        // Micro contracts: MNQ, MES, MGC, MYM, M2K, etc.
+        // All start with "M" followed by uppercase letter.
+        [GeneratedRegex(@"^M[A-Z]")]
+        private static partial Regex MicroContractPattern();
+
+        public static bool IsMicro(this ISymbol symbol)
+        {
+            return MicroContractPattern().IsMatch(symbol.Id);
+        }
+
         public static DrawdownMode InferDrawdownMode(this IAccount account)
         {
             ArgumentNullException.ThrowIfNull(account);
@@ -139,6 +149,27 @@ namespace AutoSizeStrategy
                     _ => 2,
                 };
             });
+        }
+
+        public static bool TryGetInfoDouble(this IAccount account, string key, out double result)
+        {
+            result = 0;
+            if (
+                account.AdditionalInfo != null
+                && account.AdditionalInfo.TryGetValue(key, out var valStr)
+                && !string.IsNullOrWhiteSpace(valStr)
+            )
+            {
+                // This will return true for "inf", "123.45", and "Infinity"
+                bool success = valStr.TryParseDouble(out result);
+                if (success)
+                {
+                    MathUtil.ValidateFinite(result, $"account.AdditionalInfo[{key}]");
+                }
+
+                return success;
+            }
+            return false;
         }
 
         // Just like double.TryParse, but handles "inf" and "Infinity"

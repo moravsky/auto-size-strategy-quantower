@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
@@ -15,6 +16,7 @@ namespace AutoSizeStrategy
     {
         private bool _disposed;
         private StrategyEngine strategyEngine;
+        private Metrics metrics;
         private CancellationTokenSource _shutdownCts;
 
         public AutoSizeStrategy()
@@ -32,7 +34,8 @@ namespace AutoSizeStrategy
             }
 
             _shutdownCts = new CancellationTokenSource();
-            var context = new StrategyContext(this);
+            this.metrics = new Metrics(this);
+            var context = new StrategyContext(this, this.metrics);
             this.strategyEngine = new StrategyEngine(context);
 
             Core.NewRequest += this.CoreNewRequest;
@@ -45,6 +48,55 @@ namespace AutoSizeStrategy
         {
             base.OnCreated();
             InitializeSettings();
+        }
+
+        [Obsolete("Use OnInitializeMetrics()")]
+        protected override List<StrategyMetric> OnGetMetrics()
+        {
+            var result = base.OnGetMetrics();
+
+            try
+            {
+                if (metrics == null)
+                    return result;
+
+                var m = metrics.GetAccountMetrics();
+
+                result.Add(
+                    new StrategyMetric
+                    {
+                        Name = "Risk Precent",
+                        FormattedValue = $"{(RiskPercent / 100.0):P2}",
+                    }
+                );
+                result.Add(
+                    new StrategyMetric
+                    {
+                        Name = "Drawdown Remaining",
+                        FormattedValue = $"${m.DrawdownRemaining:F2}",
+                    }
+                );
+                result.Add(
+                    new StrategyMetric
+                    {
+                        Name = "Trades to Clutch",
+                        FormattedValue = m.TradesToClutchMode.ToString(),
+                    }
+                );
+                result.Add(
+                    new StrategyMetric
+                    {
+                        Name = "Trades to Bust",
+                        FormattedValue = m.TradesToBust.ToString(),
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                LogError($"OnGetMetrics failed: {ex.Message}");
+            }
+
+            return result;
         }
 
         private void CoreNewRequest(object sender, RequestEventArgs e)
@@ -124,6 +176,7 @@ namespace AutoSizeStrategy
             _shutdownCts = null;
             strategyEngine?.Dispose();
             strategyEngine = null;
+            metrics = null;
         }
 
         protected override void OnRemove() => Dispose();

@@ -19,6 +19,7 @@ namespace AutoSizeStrategy.Tests
         private readonly Mock<IAccount> _accountMock;
         private readonly Mock<ISymbol> _symbolMock;
         private readonly StrategyEngine _engine;
+        private readonly Metrics _metrics;
 
         public StrategyEngineTests()
         {
@@ -42,6 +43,9 @@ namespace AutoSizeStrategy.Tests
                 .SetupGet(s => s.MissingStopLossAction)
                 .Returns(MissingStopLossAction.Reject);
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
+
+            _metrics = new Metrics(_settingsMock.Object);
+            _contextMock.SetupGet(c => c.Metrics).Returns(_metrics);
 
             // Default Account (Sim)
             _accountMock.SetupGet(a => a.Id).Returns("SimDefault");

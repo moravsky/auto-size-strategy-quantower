@@ -383,5 +383,27 @@ namespace AutoSizeStrategy.Tests
                     Assert.Equal(expectedValue, result);
             }
         }
+
+        #region IsMicro
+
+        [Theory]
+        [InlineData("MNQ", true)]
+        [InlineData("MES", true)]
+        [InlineData("MGC", true)]
+        [InlineData("MYM", true)]
+        [InlineData("M2K", false)]
+        [InlineData("NQ", false)]
+        [InlineData("ES", false)]
+        [InlineData("GC", false)]
+        [InlineData("CL", false)]
+        [InlineData("6E", false)]
+        public void IsMicro_BySymbolName(string symbolId, bool expected)
+        {
+            var symbolMock = new Mock<ISymbol>();
+            symbolMock.SetupGet(s => s.Id).Returns(symbolId);
+            Assert.Equal(expected, symbolMock.Object.IsMicro());
+        }
+
+        #endregion
     }
 }

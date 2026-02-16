@@ -159,8 +159,7 @@ namespace AutoSizeStrategy
                         break;
                     case DrawdownMode.Intraday:
                         if (
-                            !TryGetInfoDouble(
-                                account,
+                            !account.TryGetInfoDouble(
                                 "AutoLiquidateThresholdCurrentValue",
                                 out double autoLiqCurrent
                             )
@@ -234,27 +233,6 @@ namespace AutoSizeStrategy
             double riskCapital = availableDrawdown * (riskPercent / 100.0);
             reason = $"OK Drawdown: {availableDrawdown:F2}, Risk: {riskCapital:F2}";
             return riskCapital;
-        }
-
-        private static bool TryGetInfoDouble(IAccount account, string key, out double result)
-        {
-            result = 0;
-            if (
-                account.AdditionalInfo != null
-                && account.AdditionalInfo.TryGetValue(key, out var valStr)
-                && !string.IsNullOrWhiteSpace(valStr)
-            )
-            {
-                // This will return true for "inf", "123.45", and "Infinity"
-                bool success = valStr.TryParseDouble(out result);
-                if (success)
-                {
-                    MathUtil.ValidateFinite(result, $"account.AdditionalInfo[{key}]");
-                }
-
-                return success;
-            }
-            return false;
         }
     }
 }
