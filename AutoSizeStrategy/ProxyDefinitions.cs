@@ -135,6 +135,16 @@ namespace AutoSizeStrategy
         public double GetTickCost(double price) => symbol.GetTickCost(price);
     }
 
+    // Default symbol for metrics before first order. MNQ values.
+    public class DefaultSymbol : ISymbol
+    {
+        public string Id => "MNQ";
+        public double Last => 20_000;
+        public double TickSize => 0.25;
+
+        public double GetTickCost(double price) => 0.50;
+    }
+
     public interface IRequestParameters
     {
         long RequestId { get; }

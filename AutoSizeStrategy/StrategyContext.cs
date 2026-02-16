@@ -35,6 +35,7 @@ namespace AutoSizeStrategy
         IStrategyLogger Logger { get; }
         IStrategySettings Settings { get; }
         ITradingService TradingService { get; }
+        Metrics Metrics { get; }
         double GetNetPositionQuantity(IAccount account, ISymbol symbol);
     }
 
@@ -42,17 +43,19 @@ namespace AutoSizeStrategy
         IStrategyLogger Logger,
         IStrategySettings Settings,
         ITradingService TradingService,
+        Metrics Metrics,
         Func<IEnumerable<IPosition>> PositionProvider
     ) : IStrategyContext
     {
         private bool _disposed = false;
 
-        // TODO: V3: Introducde DI container for pluggable logic
-        public StrategyContext(AutoSizeStrategy autoSizeStrategy)
+        // TODO: V3: Introduce DI container for pluggable logic
+        public StrategyContext(AutoSizeStrategy autoSizeStrategy, Metrics metrics)
             : this(
                 Logger: autoSizeStrategy,
                 Settings: autoSizeStrategy,
                 new TradingService(autoSizeStrategy),
+                Metrics: metrics,
                 () => Core.Instance.Positions.Select(p => new PositionWrapper(p))
             ) { }
 

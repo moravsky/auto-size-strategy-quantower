@@ -123,6 +123,10 @@ namespace AutoSizeStrategy
                 entryPrice
             );
 
+            // Update symbol context for metrics
+            context.Metrics.LastSymbol = symbol;
+            context.Metrics.LastStopDistanceTicks = stopDistanceTicks;
+
             // Calculate position size
             int calculatedSize = RiskCalculator.CalculatePositionSize(
                 riskCapital,
@@ -190,7 +194,7 @@ namespace AutoSizeStrategy
             context.TradingService.ReportCancelledOrder(orderId);
         }
 
-        private DrawdownMode InferDrawdownMode(string accountId)
+        private static DrawdownMode InferDrawdownMode(string accountId)
         {
             if (TradingExtensions.IntradayAccountPattern().IsMatch(accountId))
             {
