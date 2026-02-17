@@ -5,7 +5,17 @@ param(
 
 $root = $PSScriptRoot
 $source = Join-Path $root "AutoSizeStrategy\bin\$Config"
-$dest = "C:\Quantower\Settings\Scripts\Strategies\AutoSizeStrategy"
+
+# Determine destination root based on Config
+# Debug -> C:\QuantowerDev
+# Release -> C:\Quantower
+if ($Config -eq "Debug") {
+    $destRoot = "C:\QuantowerDev"
+} else {
+    $destRoot = "C:\Quantower"
+}
+
+$dest = "$destRoot\Settings\Scripts\Strategies\AutoSizeStrategy"
 
 # Safety checks
 if ([string]::IsNullOrWhiteSpace($dest)) {
@@ -13,6 +23,7 @@ if ([string]::IsNullOrWhiteSpace($dest)) {
     exit 1
 }
 
+# Regex check updated to allow both Quantower and QuantowerDev
 if ($dest -notmatch "Quantower.*AutoSizeStrategy$") {
     Write-Error "Destination path doesn't look right: $dest. Aborting."
     exit 1
@@ -27,6 +38,10 @@ if (-not (Test-Path $source)) {
 if (Test-Path $dest) {
     Write-Host "Cleaning $dest"
     Remove-Item "$dest\*" -Force -Recurse
+} else {
+    # Optional: Create directory if it doesn't exist (useful for new dev setups)
+    Write-Host "Destination does not exist, creating: $dest"
+    New-Item -ItemType Directory -Force -Path $dest | Out-Null
 }
 
 # Copy new files
