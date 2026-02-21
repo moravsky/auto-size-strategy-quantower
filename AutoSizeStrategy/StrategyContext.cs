@@ -28,6 +28,7 @@ namespace AutoSizeStrategy
         double CommissionMini { get; }
         double AverageSlippageTicks { get; }
         double ClutchModeTriggerPercent { get; }
+        double[] ClutchModeRisk { get; }
     }
 
     public interface IStrategyContext : IDisposable

@@ -53,6 +53,8 @@ namespace AutoSizeStrategy.Test
             // Trigger: 30% of Starting Balance (relative to failure)
             // 30% of $4,500 = $1,350
             _settingsMock.SetupGet(s => s.ClutchModeTriggerPercent).Returns(30);
+            // Clutch mode risk: 25%, 25%, 100% (YOLO)
+            _settingsMock.SetupGet(s => s.ClutchModeRisk).Returns([0.25, 0.25, 1]);
         }
 
         [Theory]
