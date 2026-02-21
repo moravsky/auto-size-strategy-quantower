@@ -15,9 +15,6 @@ namespace AutoSizeStrategy
         private const int MaxIterations = 10_000;
         private const double MinRiskPercentage = .05;
 
-        // 25%, 25%, YOLO (100%)
-        private static readonly double[] ClutchSequence = [0.25, 0.25, 1.00];
-
         private readonly IStrategySettings _settings =
             settings ?? throw new ArgumentNullException(nameof(settings));
 
@@ -105,7 +102,7 @@ namespace AutoSizeStrategy
 
         // Simulate each shot losing from the clutch trigger to get zone boundaries.
         // The zone current balance falls into tells us how many shots are left.
-        private static int GetClutchTrades(
+        private int GetClutchTrades(
             double currentBalance,
             double clutchTriggerBalance,
             double hardFloor,
@@ -115,15 +112,16 @@ namespace AutoSizeStrategy
         )
         {
             double zoneFloor = clutchTriggerBalance;
+            double[] clutchSequence = _settings.ClutchModeRisk;
 
-            for (int i = 0; i < ClutchSequence.Length; i++)
+            for (int i = 0; i < clutchSequence.Length; i++)
             {
                 double riskBase = zoneFloor - hardFloor;
 
                 // Let RiskCalculator determine the true size. If it's 0, this shot
                 // yields 0 contracts, meaning the floor won't move for this iteration.
                 int contracts = RiskCalculator.CalculatePositionSize(
-                    riskBase * ClutchSequence[i],
+                    riskBase * clutchSequence[i],
                     stopTicks,
                     tickVal
                 );
@@ -132,7 +130,7 @@ namespace AutoSizeStrategy
 
                 // Above the post-loss threshold: we're inside shot i's zone, it hasn't fired yet.
                 if (currentBalance > zoneFloor)
-                    return ClutchSequence.Length - i;
+                    return clutchSequence.Length - i;
             }
 
             return 0;

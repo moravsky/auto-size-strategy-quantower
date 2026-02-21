@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TradingPlatform.BusinessLayer;
@@ -19,6 +20,7 @@ namespace AutoSizeStrategy
         public double CommissionMini { get; set; } = 2.5;
         public double AverageSlippageTicks { get; set; } = 1.5;
         public double ClutchModeTriggerPercent { get; set; } = 30.0;
+        public double[] ClutchModeRisk { get; set; } = [0.25, 0.25, 1.00];
         private readonly List<SettingItem> _additionalSettings = [];
 
         public override IList<SettingItem> Settings
@@ -142,7 +144,7 @@ namespace AutoSizeStrategy
             commMiniSetting.PropertyChanged += (s, e) =>
                 this.CommissionMini = (double)commMiniSetting.Value;
 
-            var clutchModeSetting = new SettingItemDouble(
+            var clutchModeTriggerSetting = new SettingItemDouble(
                 "Clutch Mode Trigger Percent",
                 this.ClutchModeTriggerPercent
             )
@@ -151,8 +153,27 @@ namespace AutoSizeStrategy
                 Maximum = 100.0,
                 Increment = 1.0,
             };
-            clutchModeSetting.PropertyChanged += (s, e) =>
-                this.ClutchModeTriggerPercent = (double)clutchModeSetting.Value;
+            clutchModeTriggerSetting.PropertyChanged += (s, e) =>
+                this.ClutchModeTriggerPercent = (double)clutchModeTriggerSetting.Value;
+
+            var clutchModeRiskSequenceSetting = new SettingItemString(
+                "Clutch Mode Risk Sequence",
+                string.Join(", ", ClutchModeRisk)
+            );
+            clutchModeRiskSequenceSetting.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName != nameof(SettingItem.Value))
+                    return;
+                if (
+                    TryParseClutchSequence(
+                        clutchModeRiskSequenceSetting.Value as string,
+                        out double[] parsed
+                    )
+                )
+                {
+                    ClutchModeRisk = parsed;
+                }
+            };
 
             _additionalSettings.Add(
                 new SettingItemGroup(
@@ -162,10 +183,35 @@ namespace AutoSizeStrategy
                         slippageSetting,
                         commMicroSetting,
                         commMiniSetting,
-                        clutchModeSetting,
+                        clutchModeTriggerSetting,
+                        clutchModeRiskSequenceSetting,
                     ]
                 )
             );
+        }
+
+        public static bool TryParseClutchSequence(string input, out double[] clutchSequence)
+        {
+            clutchSequence = [];
+            if (string.IsNullOrWhiteSpace(input))
+                return false;
+
+            var parts = input.Split(
+                ',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            );
+            if (parts.Length == 0)
+                return false;
+
+            clutchSequence = new double[parts.Length];
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (!double.TryParse(parts[i], out double val) || val <= 0 || val > 1.0)
+                    return false;
+                clutchSequence[i] = val;
+            }
+
+            return true;
         }
     }
 }
