@@ -32,7 +32,7 @@ namespace AutoSizeStrategy
                 return new AccountMetrics(0, 0, 0);
 
             double liquidationThreshold = account.Balance - availableDrawdown;
-            double clutchTriggerBalance = GetClutchTriggerBalance(account, liquidationThreshold);
+            double clutchTriggerBalance = _settings.ClutchModeTriggerBalance;
 
             var (stopTicks, tickVal, lossPerContract) = GetUnitEconomics();
 
@@ -71,19 +71,6 @@ namespace AutoSizeStrategy
                 out _,
                 minAccountBalanceOverride: _settings.MinAccountBalanceOverride
             );
-        }
-
-        private double GetClutchTriggerBalance(IAccount account, double liquidationThreshold)
-        {
-            account.TryGetInfoDouble(
-                "AutoLiquidateMaxMinAccountBalance",
-                out double startingBalance
-            );
-            account.TryGetInfoDouble("MinAccountBalance", out double minAccountBalance);
-            double initialRiskBudget = startingBalance - minAccountBalance;
-            double clutchBufferAmount =
-                initialRiskBudget * (_settings.ClutchModeTriggerPercent / 100.0);
-            return liquidationThreshold + clutchBufferAmount;
         }
 
         private (double stopTicks, double tickVal, double lossPerContract) GetUnitEconomics()

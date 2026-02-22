@@ -76,19 +76,19 @@ namespace AutoSizeStrategy
                         FormattedValue = $"${m.DrawdownRemaining:F2}",
                     }
                 );
+                var tradesToClutch =
+                    this.ClutchModeTriggerBalance > 0 ? m.TradesToClutchMode.ToString() : "N/A";
                 result.Add(
                     new StrategyMetric
                     {
                         Name = "Trades to Clutch",
-                        FormattedValue = m.TradesToClutchMode.ToString(),
+                        FormattedValue = tradesToClutch,
                     }
                 );
+                var tradesToBust =
+                    this.ClutchModeTriggerBalance > 0 ? m.TradesToBust.ToString() : "N/A";
                 result.Add(
-                    new StrategyMetric
-                    {
-                        Name = "Trades to Bust",
-                        FormattedValue = m.TradesToBust.ToString(),
-                    }
+                    new StrategyMetric { Name = "Trades to Bust", FormattedValue = tradesToBust }
                 );
             }
             catch (Exception ex)
