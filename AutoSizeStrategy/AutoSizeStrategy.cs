@@ -33,6 +33,16 @@ namespace AutoSizeStrategy
                 return;
             }
 
+            if (
+                ((IStrategySettings)this).CurrentAccount.InferDrawdownMode()
+                    == DrawdownMode.EndOfDay
+                && MinAccountBalanceOverride == 0
+            )
+            {
+                LogError($"End of day drawdown accounts require Minimum Balance Override");
+                return;
+            }
+
             _shutdownCts = new CancellationTokenSource();
             this.metrics = new Metrics(this);
             var context = new StrategyContext(this, this.metrics);
