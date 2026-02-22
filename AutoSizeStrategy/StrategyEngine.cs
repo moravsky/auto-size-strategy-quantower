@@ -32,6 +32,17 @@ namespace AutoSizeStrategy
                 return;
             }
 
+            if (
+                context.Settings.CurrentAccount.InferDrawdownMode() == DrawdownMode.EndOfDay
+                && context.Settings.MinAccountBalanceOverride == 0
+            )
+            {
+                context.Logger.LogError(
+                    $"End of day drawdown accounts require Minimum Balance Override"
+                );
+                return;
+            }
+
             // Check account filter
             if (context.Settings.CurrentAccount.Id != orderRequestParameters.Account.Id)
             {
@@ -219,6 +230,17 @@ namespace AutoSizeStrategy
             if (context.Settings.CurrentAccount == null)
             {
                 context.Logger.LogError($"Target account not set, cannot continue");
+                return;
+            }
+
+            if (
+                context.Settings.CurrentAccount.InferDrawdownMode() == DrawdownMode.EndOfDay
+                && context.Settings.MinAccountBalanceOverride == 0
+            )
+            {
+                context.Logger.LogError(
+                    $"End of day drawdown accounts require Minimum Balance Override"
+                );
                 return;
             }
 

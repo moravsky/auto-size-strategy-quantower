@@ -154,7 +154,22 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public void ProcessRequest_EOD_NoOverride_ReturnsZero()
+        public void ProcessRequest_NullAccount_LogsErrorAndReturns()
+        {
+            _settingsMock.SetupGet(s => s.CurrentAccount).Returns((IAccount)null!);
+            var request = CreateValidRequest(quantity: 5);
+
+            _engine.ProcessRequest(request);
+
+            _loggerMock.Verify(
+                l => l.LogError(It.Is<string>(s => s.Contains("Target account not set"))),
+                Times.Once
+            );
+            Assert.Equal(5, request.Quantity); // unchanged
+        }
+
+        [Fact]
+        public void ProcessRequest_EOD_NoOverride_LogsErrorAndReturns()
         {
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
             _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
@@ -165,7 +180,18 @@ namespace AutoSizeStrategy.Tests
 
             _engine.ProcessRequest(request);
 
-            Assert.Equal(0, request.Quantity);
+            _loggerMock.Verify(
+                l =>
+                    l.LogError(
+                        It.Is<string>(s =>
+                            s.Contains(
+                                "End of day drawdown accounts require Minimum Balance Override"
+                            )
+                        )
+                    ),
+                Times.Once
+            );
+            Assert.Equal(1000, request.Quantity);
         }
 
         #endregion
@@ -701,6 +727,44 @@ namespace AutoSizeStrategy.Tests
                 l => l.LogInfo(It.Is<string>(s => s.Contains("Passing exit order"))),
                 Times.Once
             );
+        }
+
+        [Fact]
+        public async Task ProcessOrder_NullAccount_LogsErrorAndReturns()
+        {
+            _settingsMock.SetupGet(s => s.CurrentAccount).Returns((IAccount)null!);
+            var order = CreateMockOrder("ord1", qty: 5);
+
+            await _engine.ProcessOrder(order.Object);
+
+            _loggerMock.Verify(
+                l => l.LogError(It.Is<string>(s => s.Contains("Target account not set"))),
+                Times.Once
+            );
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ProcessOrder_EOD_NoOverride_LogsErrorDoesNotCancel()
+        {
+            _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
+            _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
+            var order = CreateMockOrder("ord2", qty: 5);
+
+            await _engine.ProcessOrder(order.Object);
+
+            _loggerMock.Verify(
+                l =>
+                    l.LogError(
+                        It.Is<string>(s =>
+                            s.Contains(
+                                "End of day drawdown accounts require Minimum Balance Override"
+                            )
+                        )
+                    ),
+                Times.Once
+            );
+            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
         }
 
         #endregion
