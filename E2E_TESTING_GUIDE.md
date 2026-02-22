@@ -16,13 +16,16 @@ For minor releases do Part 1 on a replay connection and Part 2 on a live connect
 
 1. Launch Quantower
 2. Connect to **Connections → Replay** (use any historical data source)
-3. Open a chart for MNQ or NQ
-4. Go to **Strategies Manager → AutoSizeStrategy42**
-5. Configure:
+3. Set stating account balance to 150000
+4. Open a chart for MNQ
+5. Go to **Strategies Manager → AutoSizeStrategy42**
+6. Configure:
    - Target Account: Select the Replay account
    - Risk Percent: 2.5%
    - Missing Stop Loss Action: **Reject**
-6. Start the strategy
+   - Minimum Account Balance: 145500
+   - Clutch Mode Trigger Balance: 146850
+7. Start the strategy
 
 ---
 
@@ -68,12 +71,21 @@ For minor releases do Part 1 on a replay connection and Part 2 on a live connect
 
 ---
 
-### Test Suite E: Miscellaneous
+### Test Suite E: Account Longevity Metrics
 
 | # | Test Case | Steps | Expected Result |
 |---|-----------|-------|-----------------|
-| E1 | Risk too big for 1 contract | Set Risk Percent to 0.1%. Place order with 50-tick SL | Order cancelled (qty=0). Log: "Risk too big even for 1 contract" |
-| E2 | Modify latency acceptable | Place limit order, then modify SL | Modification completes within ~1 second (no noticeable lag) |
+| E1 | Clutch Mode Trigger Balance not set | Set Clutch Mode Trigger Balance to 0. Start the strategy | Trades to clutch/bust displayed as "N/A" |
+| E2 | Regular Mode | Set risk 8%, balance to 150K, min balance override to 145500, trigger to 151350.  Start the strategy | Drawdown: 4500, Trades to clutch: 14, Trades to bust: 17 |
+| E3 | Metrics Update | Set risk 8%, balance to 150K, min balance override to 145500, trigger to 151350.  Start the strategy. Take a significant trade | Metrics update with a win/loss |
+| E4 | Clutch Mode | Set balance to 146400, min balance override to 145500, trigger to 151350.  Start the strategy | Drawdown: 400, Trades to clutch: 0, Trades to bust: 2 |
+
+### Test Suite M: Miscellaneous
+
+| # | Test Case | Steps | Expected Result |
+|---|-----------|-------|-----------------|
+| M1 | Risk too big for 1 contract | Set Risk Percent to 0.1%. Place order with 50-tick SL | Order cancelled (qty=0). Log: "Risk too big even for 1 contract" |
+| M2 | Modify latency acceptable | Place limit order, then modify SL | Modification completes within ~1 second (no noticeable lag) |
 
 ---
 
