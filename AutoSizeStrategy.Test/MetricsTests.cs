@@ -30,8 +30,6 @@ namespace AutoSizeStrategy.Test
                     new Dictionary<string, string>
                     {
                         { "AutoLiquidateThresholdCurrentValue", "145500" },
-                        { "AutoLiquidateMaxMinAccountBalance", "150000" },
-                        { "MinAccountBalance", "145500" },
                     }
                 );
 
@@ -52,7 +50,7 @@ namespace AutoSizeStrategy.Test
 
             // Trigger: 30% of Starting Balance (relative to failure)
             // 30% of $4,500 = $1,350
-            _settingsMock.SetupGet(s => s.ClutchModeTriggerPercent).Returns(30);
+            _settingsMock.SetupGet(s => s.ClutchModeTriggerBalance).Returns(146850);
             // Clutch mode risk: 25%, 25%, 100% (YOLO)
             _settingsMock.SetupGet(s => s.ClutchModeRisk).Returns([0.25, 0.25, 1]);
         }
@@ -137,6 +135,7 @@ namespace AutoSizeStrategy.Test
             _accountMock.SetupGet(a => a.Balance).Returns(balance);
             _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(150000);
+            _settingsMock.SetupGet(s => s.ClutchModeTriggerBalance).Returns(151350);
             var metrics = new Metrics(_settingsMock.Object)
             {
                 LastSymbol = _symbolMock.Object,
