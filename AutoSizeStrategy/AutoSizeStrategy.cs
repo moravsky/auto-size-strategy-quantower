@@ -75,7 +75,7 @@ namespace AutoSizeStrategy
                 result.Add(
                     new StrategyMetric
                     {
-                        Name = "Risk Precent",
+                        Name = "Risk Percent",
                         FormattedValue = $"{(RiskPercent / 100.0):P2}",
                     }
                 );
