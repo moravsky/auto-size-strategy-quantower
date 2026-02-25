@@ -73,16 +73,9 @@ namespace AutoSizeStrategy
 
     public class AccountWrapper(Account account) : IAccount
     {
-        public AccountWrapper(IAccount wrapper)
-            : this((Account)null)
-        {
-            Id = wrapper?.Id ?? default;
-            Balance = wrapper?.Balance ?? default;
-        }
-
         public Account Inner => account;
-        public string Id { get; } = account?.Id ?? default;
-        public double Balance { get; } = account?.Balance ?? default;
+        public string Id => account?.Id ?? default;
+        public double Balance => account?.Balance ?? default;
 
         public Dictionary<string, string> AdditionalInfo
         {
@@ -97,7 +90,6 @@ namespace AutoSizeStrategy
                 {
                     if (item?.Id != null)
                     {
-                        // Safe string conversion
                         additionalInfo[item.Id] = item.Value?.ToString() ?? string.Empty;
                     }
                 }

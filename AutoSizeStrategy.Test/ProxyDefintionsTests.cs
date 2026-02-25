@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Threading;
 using AutoSizeStrategy;
 using Moq;
@@ -103,6 +104,28 @@ namespace AutoSizeStrategy.Test
 
             // Assert
             Assert.Equal(5, wrapper.Inner.StopLossItems[0].Quantity);
+        }
+
+        private static Account CreateFakeAccount(double balance)
+        {
+            var account = (Account)RuntimeHelpers.GetUninitializedObject(typeof(Account));
+
+            typeof(Account).GetProperty("Balance")!.SetValue(account, balance);
+
+            return account;
+        }
+
+        [Fact]
+        public void Balance_DelegatesToSdkAccount_NotCachedAtConstruction()
+        {
+            var account = CreateFakeAccount(150_000);
+            var wrapper = new AccountWrapper(account);
+
+            Assert.Equal(150_000, wrapper.Balance);
+
+            typeof(Account).GetProperty("Balance")!.SetValue(account, 148_500);
+
+            Assert.Equal(148_500, wrapper.Balance);
         }
     }
 }
