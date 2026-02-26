@@ -124,7 +124,7 @@ namespace AutoSizeStrategy
             var symbol = orderRequestParameters.Symbol;
             double entryPrice = orderRequestParameters.GetLikelyFillPrice();
             double tickSize = symbol.TickSize;
-            double tickValue = symbol.GetTickCost(symbol.Last);
+            double tickValue = symbol.GetTickCost(entryPrice);
             if (!double.IsFinite(tickValue) || tickValue <= 0)
             {
                 context.Logger.LogError(
@@ -329,7 +329,7 @@ namespace AutoSizeStrategy
             var symbol = order.Symbol;
             double entryPrice = order.GetLikelyFillPrice();
             double tickSize = symbol.TickSize;
-            double tickValue = symbol.GetTickCost(symbol.Last);
+            double tickValue = symbol.GetTickCost(entryPrice);
             if (!double.IsFinite(tickValue) || tickValue <= 0)
             {
                 context.Logger.LogError(
