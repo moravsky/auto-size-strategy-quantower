@@ -194,7 +194,7 @@ namespace AutoSizeStrategy.Test
         [InlineData(double.PositiveInfinity)]
         [InlineData(double.NegativeInfinity)]
         [InlineData(double.NaN)]
-        public void GetAccountMetrics_NanTickCost_ReturnsZeros(double tickCost)
+        public void GetAccountMetrics_NanTickCost_ReturnsNulls(double tickCost)
         {
             _accountMock.SetupGet(a => a.Balance).Returns(150000);
             _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(tickCost);
@@ -206,8 +206,8 @@ namespace AutoSizeStrategy.Test
             var result = metrics.GetAccountMetrics();
 
             Assert.Equal(4500, result.DrawdownRemaining);
-            Assert.Equal(0, result.TradesToBust);
-            Assert.Equal(0, result.TradesToClutchMode);
+            Assert.Null(result.TradesToBust);
+            Assert.Null(result.TradesToClutchMode);
         }
     }
 }

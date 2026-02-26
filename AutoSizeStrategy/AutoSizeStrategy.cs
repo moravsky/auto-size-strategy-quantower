@@ -83,11 +83,12 @@ namespace AutoSizeStrategy
                     new StrategyMetric
                     {
                         Name = "Drawdown Remaining",
-                        FormattedValue = $"${m.DrawdownRemaining:F2}",
+                        FormattedValue =
+                            m.DrawdownRemaining != null ? $"${m.DrawdownRemaining:F2}" : "N/A",
                     }
                 );
                 var tradesToClutch =
-                    this.ClutchModeTriggerBalance > 0 ? m.TradesToClutchMode.ToString() : "N/A";
+                    m.TradesToClutchMode != null ? m.TradesToClutchMode.ToString() : "N/A";
                 result.Add(
                     new StrategyMetric
                     {
@@ -95,8 +96,7 @@ namespace AutoSizeStrategy
                         FormattedValue = tradesToClutch,
                     }
                 );
-                var tradesToBust =
-                    this.ClutchModeTriggerBalance > 0 ? m.TradesToBust.ToString() : "N/A";
+                var tradesToBust = m.TradesToBust != null ? m.TradesToBust.ToString() : "N/A";
                 result.Add(
                     new StrategyMetric { Name = "Trades to Bust", FormattedValue = tradesToBust }
                 );

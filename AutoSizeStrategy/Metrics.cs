@@ -5,9 +5,9 @@ using TradingPlatform.BusinessLayer;
 namespace AutoSizeStrategy
 {
     public record AccountMetrics(
-        double DrawdownRemaining,
-        int TradesToClutchMode,
-        int TradesToBust
+        double? DrawdownRemaining,
+        int? TradesToClutchMode,
+        int? TradesToBust
     );
 
     public class Metrics(IStrategySettings settings)
@@ -25,7 +25,7 @@ namespace AutoSizeStrategy
         {
             var account = _settings.CurrentAccount;
             if (account == null)
-                return new AccountMetrics(0, 0, 0);
+                return new AccountMetrics(null, null, null);
 
             double availableDrawdown = GetAvailableDrawdown(account);
             if (availableDrawdown <= 0)
@@ -33,10 +33,12 @@ namespace AutoSizeStrategy
 
             double liquidationThreshold = account.Balance - availableDrawdown;
             double clutchTriggerBalance = _settings.ClutchModeTriggerBalance;
+            if (clutchTriggerBalance <= 0)
+                return new AccountMetrics(availableDrawdown, null, null);
 
             var (stopTicks, tickVal, lossPerContract) = GetUnitEconomics();
             if (!double.IsFinite(tickVal) || tickVal <= 0)
-                return new AccountMetrics(availableDrawdown, 0, 0);
+                return new AccountMetrics(availableDrawdown, null, null);
 
             int tradesToClutch = GetNormalTrades(
                 startBalance: account.Balance,
