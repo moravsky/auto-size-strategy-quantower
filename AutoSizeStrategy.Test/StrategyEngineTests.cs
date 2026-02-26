@@ -555,6 +555,24 @@ namespace AutoSizeStrategy.Tests
             );
         }
 
+        [Theory]
+        [InlineData(double.PositiveInfinity)]
+        [InlineData(double.NegativeInfinity)]
+        [InlineData(double.NaN)]
+        public void ProcessRequest_NoTickCost_LogsErrorAndCancels(double tickCost)
+        {
+            _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(tickCost);
+            var request = CreateValidRequest(quantity: 5, stopDistanceTicks: 20);
+
+            _engine.ProcessRequest(request);
+
+            _loggerMock.Verify(
+                l => l.LogError(It.Is<string>(s => s.Contains("tick value unavailable"))),
+                Times.Once
+            );
+            Assert.Equal(0, request.Quantity);
+        }
+
         #endregion
 
         #region ProcessOrder -------------------------------------------
@@ -765,6 +783,35 @@ namespace AutoSizeStrategy.Tests
                 Times.Once
             );
             _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData(double.PositiveInfinity)]
+        [InlineData(double.NegativeInfinity)]
+        [InlineData(double.NaN)]
+        public async Task ProcessOrder_NoTickCost_LogsErrorAndCancels(double tickCost)
+        {
+            _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(tickCost);
+
+            var order = CreateMockOrder("ord-no-tick", qty: 5);
+            order
+                .SetupGet(o => o.StopLossItems)
+                .Returns([SlTpHolder.CreateSL(20, PriceMeasurement.Offset)]);
+
+            await _engine.ProcessOrder(order.Object);
+
+            _loggerMock.Verify(
+                l => l.LogError(It.Is<string>(s => s.Contains("tick value unavailable"))),
+                Times.Once
+            );
+            _serviceMock.Verify(
+                s =>
+                    s.Cancel(
+                        It.Is<IOrder>(o => o.Id == "ord-no-tick"),
+                        It.Is<bool>(b => b == true)
+                    ),
+                Times.Once
+            );
         }
 
         #endregion

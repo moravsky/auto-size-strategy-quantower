@@ -125,6 +125,14 @@ namespace AutoSizeStrategy
             double entryPrice = orderRequestParameters.GetLikelyFillPrice();
             double tickSize = symbol.TickSize;
             double tickValue = symbol.GetTickCost(symbol.Last);
+            if (!double.IsFinite(tickValue) || tickValue <= 0)
+            {
+                context.Logger.LogError(
+                    $"Symbol {symbol.Id} tick value unavailable ({tickValue}), cancelling request {orderRequestParameters.RequestId}"
+                );
+                orderRequestParameters.Quantity = 0;
+                return;
+            }
 
             // Caculate stop loss price
             var slTpHolder = orderRequestParameters.StopLossItems[0];
@@ -322,6 +330,14 @@ namespace AutoSizeStrategy
             double entryPrice = order.GetLikelyFillPrice();
             double tickSize = symbol.TickSize;
             double tickValue = symbol.GetTickCost(symbol.Last);
+            if (!double.IsFinite(tickValue) || tickValue <= 0)
+            {
+                context.Logger.LogError(
+                    $"Symbol {symbol.Id} tick value unavailable ({tickValue}), cancelling order {order.Id}"
+                );
+                context.TradingService.Cancel(order, useLeadingJitter: true);
+                return;
+            }
 
             // Caculate stop loss price
             var slTpHolder = order.StopLossItems[0];

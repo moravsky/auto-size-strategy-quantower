@@ -35,6 +35,8 @@ namespace AutoSizeStrategy
             double clutchTriggerBalance = _settings.ClutchModeTriggerBalance;
 
             var (stopTicks, tickVal, lossPerContract) = GetUnitEconomics();
+            if (!double.IsFinite(tickVal) || tickVal <= 0)
+                return new AccountMetrics(availableDrawdown, 0, 0);
 
             int tradesToClutch = GetNormalTrades(
                 startBalance: account.Balance,
@@ -77,6 +79,10 @@ namespace AutoSizeStrategy
         {
             double stopTicks = Math.Max(LastStopDistanceTicks, _settings.MinimumStopLossTicks);
             double tickVal = LastSymbol.GetTickCost(LastSymbol.Last);
+
+            if (double.IsNaN(tickVal) || tickVal <= 0)
+                return (stopTicks, 0, 0);
+
             double commission = LastSymbol.IsMicro()
                 ? _settings.CommissionMicro
                 : _settings.CommissionMini;
