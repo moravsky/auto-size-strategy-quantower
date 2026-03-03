@@ -64,7 +64,16 @@ namespace AutoSizeStrategy
                 "Action on Missing Stop Loss",
                 variants.First(),
                 variants
-            );
+            )
+            {
+                Description = """
+                    Determines behavior when an order is placed without a Stop Loss.
+
+                    Reject: Instantly cancels the order.
+                    Ignore: Allows the order to pass to the broker without applying
+                    the auto-size risk math.
+                    """,
+            };
             missingStopLossActionSetting.PropertyChanged += (s, e) =>
             {
                 if (missingStopLossActionSetting.Value is SelectItem si)
@@ -78,6 +87,13 @@ namespace AutoSizeStrategy
             {
                 Minimum = 0.0,
                 Increment = 0.01,
+                Description = """
+                    Required for End of Day (EOD) drawdown accounts.
+                    Sets the hard floor balance where the account is busted.
+
+                    Note: For Intraday or Static accounts, this overrides
+                    the broker's threshold.
+                    """,
             };
             minBalanceSetting.PropertyChanged += (s, e) =>
                 this.MinAccountBalanceOverride = (double)minBalanceSetting.Value;
@@ -152,6 +168,12 @@ namespace AutoSizeStrategy
                 Minimum = 0.0,
                 Increment = 0.01,
                 DecimalPlaces = 2,
+                Description = """
+                    The dollar amount reserved for 'Clutch Mode'.
+
+                    This is a sequence of trades with elevated risk designed to
+                    bring the account out of a deep drawdown.
+                    """,
             };
             clutchModeBudgetSetting.PropertyChanged += (s, e) =>
                 this.ClutchModeBudget = (double)clutchModeBudgetSetting.Value;
@@ -159,7 +181,16 @@ namespace AutoSizeStrategy
             var clutchModeRiskSequenceSetting = new SettingItemString(
                 "Clutch Mode Risk Sequence",
                 string.Join(", ", ClutchModeRisk)
-            );
+            )
+            {
+                Description = """
+                    A comma-separated list of risk multipliers used during Clutch Mode.
+                    Values must be between 0.01 and 1.0.
+
+                    Example: '0.25, 0.25, 1.0' means the first two trades risk 25%
+                    of the clutch budget, and the final trade risks the rest.
+                    """,
+            };
             clutchModeRiskSequenceSetting.PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName != nameof(SettingItem.Value))
