@@ -27,7 +27,7 @@ namespace AutoSizeStrategy
         double CommissionMicro { get; }
         double CommissionMini { get; }
         double AverageSlippageTicks { get; }
-        double ClutchModeTriggerBalance { get; }
+        double ClutchModeBudget { get; }
         double[] ClutchModeRisk { get; }
     }
 

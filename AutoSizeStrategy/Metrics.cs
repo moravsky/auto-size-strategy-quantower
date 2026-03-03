@@ -32,7 +32,7 @@ namespace AutoSizeStrategy
                 return new AccountMetrics(0, 0, 0);
 
             double liquidationThreshold = account.Balance - availableDrawdown;
-            double clutchTriggerBalance = _settings.ClutchModeTriggerBalance;
+            double clutchTriggerBalance = liquidationThreshold + _settings.ClutchModeBudget;
             if (clutchTriggerBalance <= 0)
                 return new AccountMetrics(availableDrawdown, null, null);
 

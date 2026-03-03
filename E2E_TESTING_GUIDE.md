@@ -24,7 +24,7 @@ For minor releases do Part 1 on a replay connection and Part 2 on a live connect
    - Risk Percent: 2.5%
    - Missing Stop Loss Action: **Reject**
    - Minimum Account Balance: 145500
-   - Clutch Mode Trigger Balance: 146850
+   - Clutch Mode Budget: 1350
 7. Start the strategy
 
 ---
@@ -75,10 +75,10 @@ For minor releases do Part 1 on a replay connection and Part 2 on a live connect
 
 | Done | # | Test Case | Steps | Expected Result |
 |------|---|-----------|-------|-----------------|
-| <input type="checkbox"> | E1 | Clutch Mode Trigger Balance not set | Set Clutch Mode Trigger Balance to 0. Start the strategy | Trades to clutch/bust displayed as "N/A" |
-| <input type="checkbox"> | E2 | Regular Mode | Set risk 8%, balance to 150K, min balance override to 145500, trigger to 151350. Start the strategy | Drawdown: 4500, Trades to clutch: 14, Trades to bust: 17 |
-| <input type="checkbox"> | E3 | Metrics Update | Set risk 8%, balance to 150K, min balance override to 145500, trigger to 151350. Start the strategy. Take a significant trade | Metrics update with a win/loss |
-| <input type="checkbox"> | E4 | Clutch Mode | Set balance to 146400, min balance override to 145500, trigger to 146850. Start the strategy | Drawdown: 400, Trades to clutch: 0, Trades to bust: 2 |
+| <input type="checkbox"> | E1 | Clutch Mode Budget not set | Set Clutch Mode Budget to 0. Start the strategy | Trades to clutch/bust displayed as "N/A" |
+| <input type="checkbox"> | E2 | Regular Mode | Set risk 8%, balance to 150K, min balance override to 145500. Start the strategy | Drawdown: 4500, Trades to clutch: 14, Trades to bust: 17 |
+| <input type="checkbox"> | E3 | Metrics Update | Set risk 8%, balance to 150K, min balance override to 145500. Start the strategy. Take a significant trade | Metrics update with a win/loss |
+| <input type="checkbox"> | E4 | Clutch Mode | Set balance to 146400, min balance override to 145500. Start the strategy | Drawdown: 400, Trades to clutch: 0, Trades to bust: 2 |
 
 ### Test Suite M: Miscellaneous
 

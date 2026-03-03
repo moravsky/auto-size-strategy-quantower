@@ -19,7 +19,7 @@ namespace AutoSizeStrategy
         public double CommissionMicro { get; set; } = 0.25;
         public double CommissionMini { get; set; } = 2.5;
         public double AverageSlippageTicks { get; set; } = 1.5;
-        public double ClutchModeTriggerBalance { get; set; } = 0;
+        public double ClutchModeBudget { get; set; } = 1350.0;
         public double[] ClutchModeRisk { get; set; } = [0.25, 0.25, 1.00];
         private readonly List<SettingItem> _additionalSettings = [];
 
@@ -144,17 +144,17 @@ namespace AutoSizeStrategy
             commMiniSetting.PropertyChanged += (s, e) =>
                 this.CommissionMini = (double)commMiniSetting.Value;
 
-            var clutchModeTriggerSetting = new SettingItemDouble(
-                "Clutch Mode Trigger Balance",
-                this.ClutchModeTriggerBalance
+            var clutchModeBudgetSetting = new SettingItemDouble(
+                "Clutch Mode Budget",
+                this.ClutchModeBudget
             )
             {
                 Minimum = 0.0,
                 Increment = 0.01,
                 DecimalPlaces = 2,
             };
-            clutchModeTriggerSetting.PropertyChanged += (s, e) =>
-                this.ClutchModeTriggerBalance = (double)clutchModeTriggerSetting.Value;
+            clutchModeBudgetSetting.PropertyChanged += (s, e) =>
+                this.ClutchModeBudget = (double)clutchModeBudgetSetting.Value;
 
             var clutchModeRiskSequenceSetting = new SettingItemString(
                 "Clutch Mode Risk Sequence",
@@ -183,7 +183,7 @@ namespace AutoSizeStrategy
                         slippageSetting,
                         commMicroSetting,
                         commMiniSetting,
-                        clutchModeTriggerSetting,
+                        clutchModeBudgetSetting,
                         clutchModeRiskSequenceSetting,
                     ]
                 )
