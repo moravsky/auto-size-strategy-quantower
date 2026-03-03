@@ -119,6 +119,16 @@ namespace AutoSizeStrategy
                 orderRequestParameters.Quantity = 0;
                 return;
             }
+            string calculationReason1 = "";
+            var drawdown = RiskCalculator.GetAvailableDrawdown(
+                account,
+                account.InferDrawdownMode(),
+                out calculationReason1,
+                context.Settings.MinAccountBalanceOverride
+            );
+            context.Logger.LogInfo(
+                $"Account balance:{account.Balance} drawdown: {drawdown} risk capital:{riskCapital}"
+            );
 
             // Get symbol data
             var symbol = orderRequestParameters.Symbol;
