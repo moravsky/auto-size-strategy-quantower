@@ -198,16 +198,50 @@ namespace AutoSizeStrategy.Tests
 
         #region ProcessRequest ---------------------------------------------
 
-        [Fact]
-        public void ProcessRequest_Resizes_Correctly()
+        public static TheoryData<double, Side, double, double, double> ProcessRequestSizingScenarios => new()
         {
-            _accountMock.SetupGet(a => a.Balance).Returns(2000.0);
-            // Risk $200. Stop 5pts ($100/contract). Size = 2.
-            var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
+            // netPosition, side, requestedQty, stopLossTicks, expectedQty (Max Risk = 150 @ 20 ticks)
+
+            // ENTRIES (NetPos == 0)
+            { 0.0, Side.Buy, 1.0, 20.0, 150.0 }, // Magic "Buy 1" -> Upsized to max risk
+            { 0.0, Side.Buy, 1000.0, 20.0, 150.0 }, // Oversized Entry -> Capped at max risk
+
+            // PYRAMIDING (NetPos > 0)
+            { 3.0, Side.Buy, 1.0, 20.0, 147.0 }, // Magic "Buy 1" Top-up -> Upsized to remaining
+            { 3.0, Side.Buy, 1000.0, 20.0, 147.0 }, // Oversized Top-up -> Capped at remaining
+            { 150.0, Side.Buy, 10.0, 20.0, 0.0 }, // Already maxed -> Cancels to 0
+
+            // REVERSALS (NetPos opposite of order)
+            { 10.0, Side.Sell, 11.0, 20.0, 160.0 }, // Reversal Trigger (>10) -> Upsized to max short (10 + 150)
+            { 10.0, Side.Sell, 1000.0, 20.0, 160.0 }, // Oversized Flip -> Capped at max short
+
+            // EXITS (Bypasses risk sizing entirely)
+            { 10.0, Side.Sell, 5.0, 20.0, 5.0 }, // Partial Exit WITH Stop Loss -> Passes
+            { 10.0, Side.Sell, 5.0, 0.0, 5.0 }, // Partial Exit NO Stop Loss -> Passes
+            { 10.0, Side.Sell, 10.0, 0.0, 10.0 }, // Full Exit NO Stop Loss -> Passes
+        };
+
+        [Theory]
+        [MemberData(nameof(ProcessRequestSizingScenarios))]
+        public void ProcessRequest_PositionSizing_CalculatesCorrectQuantity(
+            double netPosition, Side side, double requestedQty, double stopLossTicks, double expectedQty)
+        {
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(netPosition);
+
+            // Pass 20 as a fallback just to construct the object, we clear it below if 0
+            var request = CreateValidRequest(quantity: requestedQty,
+                stopDistanceTicks: stopLossTicks > 0 ? stopLossTicks : 20);
+            request.Inner.Side = side;
+
+            // 0 Ticks = Simulate no stop loss attached
+            if (stopLossTicks <= 0)
+                request.StopLossItems.Clear();
 
             _engine.ProcessRequest(request);
 
-            Assert.Equal(2, request.Quantity); // enforced size
+            Assert.Equal(expectedQty, request.Quantity);
         }
 
         [Fact]
@@ -224,57 +258,6 @@ namespace AutoSizeStrategy.Tests
             // Verify Log
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(s => s.Contains("Risk too big"))),
-                Times.Once
-            );
-        }
-
-        [Fact]
-        public void ProcessRequest_PartialExit_PassThrough()
-        {
-            // Simulate a Long Position of 10 contracts
-            _contextMock
-                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
-                .Returns(10.0);
-
-            // Create a Sell Request (which is Exit for a Long position)
-            var request = CreateValidRequest(quantity: 3, stopDistanceTicks: 20);
-            request.Inner.Side = Side.Sell;
-
-            _engine.ProcessRequest(request);
-
-            // Quantity should remain 3, even though risk calc would resize it to 150
-            Assert.Equal(3, request.Quantity);
-
-            // Verify Log
-            _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("Passing through exit request"))),
-                Times.Once
-            );
-        }
-
-        [Fact]
-        public void ProcessRequest_ExitNoStop_PassThrough()
-        {
-            // Simulate a Long Position of 10 contracts
-            _contextMock
-                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
-                .Returns(10.0);
-
-            // CHANGE: Lower quantity to 10 so it's recognized as a pure exit!
-            var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
-            request.Inner.Side = Side.Sell;
-
-            // Clear the stop loss to test that exits don't require stops
-            request.StopLossItems.Clear();
-
-            _engine.ProcessRequest(request);
-
-            // Quantity should remain 10, as the engine bypasses sizing for pure exits
-            Assert.Equal(10, request.Quantity);
-
-            // Verify Log
-            _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("Passing through exit request"))),
                 Times.Once
             );
         }
@@ -580,52 +563,55 @@ namespace AutoSizeStrategy.Tests
 
         #region ProcessOrder -------------------------------------------
 
-        [Fact]
-        public async Task ProcessOrder_EntryRightSize_PassThrough()
+        public static TheoryData<double, Side, double, double, bool> ProcessOrderSizingScenarios => new()
         {
-            // Start with 20K balance
-            _accountMock.SetupGet(a => a.Balance).Returns(10_000.0);
+            // netPos, side, orderQty, stopLossTicks, expectsCancel (Max Risk = 150 @ 20 ticks)
 
-            // Create a Buy Order
-            // Risk budget = 1k. Risk = 1k / 5$ per tick (incorrect MES) / 20 ticks = 10 contracts
-            var order = CreateMockOrder("id1", 10);
-            order.SetupGet(o => o.Side).Returns(Side.Sell);
-            order
-                .SetupGet(o => o.StopLossItems)
-                .Returns([SlTpHolder.CreateSL(20, PriceMeasurement.Offset)]);
+            // ENTRIES (netPos == 0)
+            { 0.0, Side.Buy, 1.0, 20.0, false }, // Undersized entry (Passes)
+            { 0.0, Side.Buy, 150.0, 20.0, false }, // Exact max entry (Passes)
+            { 0.0, Side.Buy, 151.0, 20.0, true }, // Oversized entry (Cancels)
+
+            // PYRAMIDING (netPos same direction)
+            { 3.0, Side.Buy, 147.0, 20.0, false }, // Long top-up exact (3 + 147 = 150, Passes)
+            { 3.0, Side.Buy, 148.0, 20.0, true }, // Long top-up oversized (Cancels)
+            { -3.0, Side.Sell, 147.0, 20.0, false }, // Short top-up exact (|-3| + 147 = 150, Passes)
+            { 150.0, Side.Buy, 1.0, 20.0, true }, // Already at target (Cancels)
+
+            // REVERSALS (netPos opposite, qty > netPos)
+            { 10.0, Side.Sell, 160.0, 20.0, false }, // Exact max flip (10 close + 150 short, Passes)
+            { 10.0, Side.Sell, 161.0, 20.0, true }, // Oversized flip (Cancels)
+            { -10.0, Side.Buy, 160.0, 20.0, false }, // Exact max flip short-to-long (Passes)
+
+            // EXITS (netPos opposite, qty <= netPos)
+            { 10.0, Side.Sell, 10.0, 20.0, false }, // Full exit WITH Stop Loss (Passes)
+            { 10.0, Side.Sell, 5.0, 0.0, false }, // Partial exit NO Stop Loss (Passes)
+            { -10.0, Side.Buy, 5.0, 0.0, false }, // Partial exit short NO Stop Loss (Passes)
+        };
+
+        [Theory]
+        [MemberData(nameof(ProcessOrderSizingScenarios))]
+        public async Task ProcessOrder_PositionSizing_PassesOrCancels(
+            double netPosition, Side side, double orderQty, double stopLossTicks, bool expectsCancellation)
+        {
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(netPosition);
+
+            var order = CreateMockOrder("sizing-test", qty: orderQty);
+            order.SetupGet(o => o.Side).Returns(side);
+
+            if (stopLossTicks <= 0)
+                order.SetupGet(o => o.StopLossItems).Returns([]);
+            else
+                order.SetupGet(o => o.StopLossItems)
+                    .Returns([SlTpHolder.CreateSL(stopLossTicks, PriceMeasurement.Offset)]);
 
             await _engine.ProcessOrder(order.Object);
 
-            // Should NOT call Cancel
-            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
-        }
-
-        [Fact]
-        public async Task ProcessOrder_Cancels_WhenQuantityMismatch()
-        {
-            var order = CreateMockOrder(id: "456", qty: 5);
-            order
-                .SetupGet(o => o.StopLossItems)
-                .Returns([SlTpHolder.CreateSL(20, PriceMeasurement.Offset)]);
-
-            await _engine.ProcessOrder(order.Object);
-
-            // Correct size: 150K * 10% = 15K / 5$ per tick (incorrect MES) / 20 ticks = 150
-            var calculatedSize = 150;
-            _loggerMock.Verify(
-                l =>
-                    l.LogInfo(
-                        It.Is<string>(s =>
-                            s.Contains(
-                                $"Cancelling Order {order.Object.Id}. Size is {order.Object.TotalQuantity}, must be {calculatedSize}."
-                            )
-                        )
-                    ),
-                Times.Once
-            );
             _serviceMock.Verify(
-                s => s.Cancel(It.Is<IOrder>(i => i.Id.Equals("456")), It.Is<bool>(b => b == true)),
-                Times.Once
+                s => s.Cancel(It.Is<IOrder>(o => o.Id == "sizing-test"), It.Is<bool>(b => b == true)),
+                expectsCancellation ? Times.Once() : Times.Never()
             );
         }
 
@@ -640,53 +626,6 @@ namespace AutoSizeStrategy.Tests
 
             _loggerMock.VerifyNoOtherCalls();
             order.VerifyGet(o => o.Status, Times.AtLeastOnce);
-        }
-
-        [Fact]
-        public async Task ProcessOrder_ExitWrongSize_PassThrough()
-        {
-            // Simulate a Short Position of -10 contracts
-            _contextMock
-                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
-                .Returns(-10.0);
-
-            // Create a Buy Order (Exit for Short)
-            var order = CreateMockOrder("id_reduce", 5);
-            order.SetupGet(o => o.Side).Returns(Side.Buy);
-            // Simulate that the size is "wrong" according to risk to ensure it would be cancelled if not Exit
-            // (e.g. Risk calc might want 1 contract, but order is 5)
-
-            await _engine.ProcessOrder(order.Object);
-
-            // Should NOT call Cancel
-            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
-            _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains($"Passing exit order"))),
-                Times.Once
-            );
-        }
-
-        [Fact]
-        public async Task ProcessOrder_ExitNoStop_PassThrough()
-        {
-            // Simulate a Short Position of -10 contracts
-            _contextMock
-                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
-                .Returns(-10.0);
-
-            // Create a Buy Order (Exit for Short)
-            var order = CreateMockOrder("id_reduce", 5);
-            order.SetupGet(o => o.Side).Returns(Side.Buy);
-            order.SetupGet(o => o.StopLossItems).Returns([]);
-
-            await _engine.ProcessOrder(order.Object);
-
-            // Should NOT call Cancel
-            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
-            _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains($"Passing exit order"))),
-                Times.Once
-            );
         }
 
         [Fact]
@@ -726,28 +665,6 @@ namespace AutoSizeStrategy.Tests
             await _engine.ProcessOrder(order.Object);
             // Should NOT call Cancel
             _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
-        }
-
-        [Fact]
-        public async Task ProcessOrder_ExitWithStopLoss_PassThrough()
-        {
-            _contextMock
-                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
-                .Returns(-10.0);
-
-            var order = CreateMockOrder("exit-with-sl", 5);
-            order.SetupGet(o => o.Side).Returns(Side.Buy);
-            order
-                .SetupGet(o => o.StopLossItems)
-                .Returns([SlTpHolder.CreateSL(20, PriceMeasurement.Offset)]);
-
-            await _engine.ProcessOrder(order.Object);
-
-            _serviceMock.Verify(s => s.Cancel(It.IsAny<IOrder>(), It.IsAny<bool>()), Times.Never);
-            _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("Passing exit order"))),
-                Times.Once
-            );
         }
 
         [Fact]

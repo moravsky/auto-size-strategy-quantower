@@ -80,6 +80,15 @@ For minor releases do Part 1 on a replay connection and Part 2 on a live connect
 | <input type="checkbox"> | E3 | Metrics Update | Set risk 8%, balance to 150K, min balance override to 145500. Start the strategy. Take a significant trade | Metrics update with a win/loss |
 | <input type="checkbox"> | E4 | Clutch Mode | Set balance to 146400, min balance override to 145500. Start the strategy | Drawdown: 400, Trades to clutch: 0, Trades to bust: 2 |
 
+### Test Suite F: Position-Aware Sizing
+
+| <input type="checkbox"> | F1 | Existing position reduces allowed increment | Enter long via market order for qty=3 (strategy will resize — note actual fill qty). Place another buy limit order for qty=1000 | Second order resized to calculatedSize minus current position. Log shows "Changed request X quantity from 1000 to Y" |
+| <input type="checkbox"> | F2 | Pyramiding blocked at target | Enter long at full calculatedSize via market order. Place another buy order | Order cancelled (remaining capacity=0). Log shows "position already at target size" |
+| <input type="checkbox"> | F3 | Short position allows top-up | Enter short via market order (strategy sizes it). Manually close half via buy. Place another sell order for qty=1000 | Sell order resized to remaining short capacity. Log shows resize |
+| <input type="checkbox"> | F4 | Undersized entry passes through | No open position. Place buy limit order for qty=1 when calculatedSize > 1 | Order passes through at qty=1. No cancellation, no resize |
+| <input type="checkbox">|	F5 |	Position Flip / Reversal |	Enter long via market order for qty=2. Place a sell order for qty=1000 with a SL. | Order is resized to (2 + calculatedSize). Log shows resize. Position successfully flips to short at target capacity.
+
+
 ### Test Suite M: Miscellaneous
 
 | Done | # | Test Case | Steps | Expected Result |

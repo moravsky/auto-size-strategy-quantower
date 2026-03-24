@@ -119,6 +119,7 @@ namespace AutoSizeStrategy
                 orderRequestParameters.Quantity = 0;
                 return;
             }
+
             string calculationReason1 = "";
             var drawdown = RiskCalculator.GetAvailableDrawdown(
                 account,
@@ -165,49 +166,63 @@ namespace AutoSizeStrategy
 
             if (calculatedSize == 0)
             {
-                context.Logger.LogInfo("Risk too big even for 1 contract");
-            }
+                string logMessage = "Risk too big even for 1 contract";
 
-            // Set calculated size
-            if (!MathUtil.Equals(orderRequestParameters.Quantity, calculatedSize))
-            {
-                if (requestParameters is IModifyOrderRequestParameters modifyOrderRequestParameters)
+                if (requestParameters is IModifyOrderRequestParameters modifyZero)
                 {
-                    if (calculatedSize == 0)
-                    {
-                        context.Logger.LogInfo(
-                            $"Request {modifyOrderRequestParameters.RequestId}: SL too wide even for 1 contract, cancelling order {modifyOrderRequestParameters.OrderId}"
-                        );
-                        context.TradingService.Cancel(modifyOrderRequestParameters.OrderId);
-                        orderRequestParameters.Quantity = 0;
-                        return;
-                    }
-
-                    // If the new calculated size differs from the current order size
-                    // we must Cancel-Replace to avoid broker "Modify refused" errors.
-                    context.Logger.LogInfo(
-                        $"Request {modifyOrderRequestParameters.RequestId} resizing order {modifyOrderRequestParameters.OrderId}"
-                            + $" from {orderRequestParameters.Quantity} to {calculatedSize} via Cancel/Replace."
-                    );
-
-                    // Trigger the background orchestration
-                    context.TradingService.CancelReplace(
-                        modifyOrderRequestParameters.OrderId,
-                        IPlaceOrderRequestParameters.FromModify(
-                            modifyOrderRequestParameters,
-                            calculatedSize
-                        )
-                    );
-
-                    // Set current request quantity to 0 to kill the native SDK modification
-                    orderRequestParameters.Quantity = 0;
-                    return;
+                    logMessage +=
+                        $". Request {modifyZero.RequestId}: SL too wide, cancelling order {modifyZero.OrderId}";
+                    context.TradingService.Cancel(modifyZero.OrderId);
                 }
-                context.Logger.LogInfo(
-                    $"Changed request {orderRequestParameters.RequestId} quantity from {orderRequestParameters.Quantity} to {calculatedSize}"
-                );
+
+                context.Logger.LogInfo(logMessage);
+
+                orderRequestParameters.Quantity = 0;
+                return;
             }
-            orderRequestParameters.Quantity = calculatedSize;
+
+            int remainingCapacity;
+            // If the order is in the opposite direction of our current position (a reversal/exit)
+            if (orderRequestParameters.Side.IsExitDirection(netPosition))
+            {
+                // Capacity = The amount needed to flatten + the max allowed risk in the new direction
+                remainingCapacity = (int)Math.Abs(netPosition) + calculatedSize;
+            }
+            else
+            {
+                // Pyramiding: Capacity = Max allowed risk - what we already hold
+                remainingCapacity = calculatedSize - (int)Math.Abs(netPosition);
+            }
+
+            if (remainingCapacity <= 0)
+            {
+                context.Logger.LogInfo(
+                    $"Request {orderRequestParameters.RequestId} cancelled: position already at target size ({calculatedSize})"
+                );
+                orderRequestParameters.Quantity = 0;
+                return;
+            }
+
+            if (requestParameters is IModifyOrderRequestParameters modifyOrderRequestParameters)
+            {
+                context.Logger.LogInfo(
+                    $"Request {modifyOrderRequestParameters.RequestId} resizing order {modifyOrderRequestParameters.OrderId}"
+                    + $" from {orderRequestParameters.Quantity} to {remainingCapacity} via Cancel/Replace. Total capacity: {calculatedSize}."
+                );
+                context.TradingService.CancelReplace(
+                    modifyOrderRequestParameters.OrderId,
+                    IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, remainingCapacity)
+                );
+
+                // Set current request quantity to 0 to kill the native SDK modification
+                orderRequestParameters.Quantity = 0;
+                return;
+            }
+
+            context.Logger.LogInfo(
+                $"Changed request {orderRequestParameters.RequestId} quantity from {orderRequestParameters.Quantity} to {remainingCapacity}. Total capacity: {calculatedSize}."
+            );
+            orderRequestParameters.Quantity = remainingCapacity;
         }
 
         public void ReportCompletedRequest(RequestParameters requestParameters)
@@ -285,6 +300,8 @@ namespace AutoSizeStrategy
                 context.Logger.LogInfo($"Passing exit order {order.Id} through unchanged");
                 return;
             }
+
+            double netPosition = context.GetNetPositionQuantity(order.Account, order.Symbol);
 
             // Check for stop loss
             if (order.StopLossItems.Length == 0)
@@ -364,11 +381,23 @@ namespace AutoSizeStrategy
                 tickValue
             );
 
-            // TODO: Allow undersized orders? UI option?
-            if (Math.Abs(order.TotalQuantity - calculatedSize) > 0.001)
+            int remainingCapacity;
+            // If the order is in the opposite direction of our current position (a reversal/exit)
+            if (order.Side.IsExitDirection(netPosition))
+            {
+                // Capacity = The amount needed to flatten + the max allowed risk in the new direction
+                remainingCapacity = (int)Math.Abs(netPosition) + calculatedSize;
+            }
+            else
+            {
+                // Pyramiding: Capacity = Max allowed risk - what we already hold
+                remainingCapacity = calculatedSize - (int)Math.Abs(netPosition);
+            }
+
+            if (order.TotalQuantity > remainingCapacity)
             {
                 context.Logger.LogInfo(
-                    $"Cancelling Order {order.Id}. Size is {order.TotalQuantity}, must be {calculatedSize}."
+                    $"Cancelling Order {order.Id}. Size {order.TotalQuantity} exceeds remaining capacity {remainingCapacity} (target={calculatedSize}, position={Math.Abs(netPosition)})."
                 );
                 context.TradingService.Cancel(order, useLeadingJitter: true);
             }

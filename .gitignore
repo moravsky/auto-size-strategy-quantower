@@ -7,4 +7,6 @@ tmp/
 *.cache
 _zzz_*
 _ZZZ_*
+zzz_*
+ZZZ_*
 settings.json
