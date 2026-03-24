@@ -41,8 +41,7 @@ namespace AutoSizeStrategy
                 return DrawdownMode.Static;
         }
 
-        // Determines if a side is exit given a KNOWN net position.
-        public static bool IsExitForPosition(this Side side, double netPosition)
+        public static bool IsExitDirection(this Side side, double netPosition)
         {
             if (netPosition > MathUtil.Epsilon)
                 return side == Side.Sell;
@@ -52,19 +51,21 @@ namespace AutoSizeStrategy
                 return false;
         }
 
-        // Determines if an order is exit given a KNOWN net position.
+        // Determines if an order is an exit (direction AND quantity <= current position).
         public static bool IsExitForPosition(this IOrder order, double netPosition)
         {
-            return order.Side.IsExitForPosition(netPosition);
+            return order.Side.IsExitDirection(netPosition)
+                   && order.TotalQuantity <= Math.Abs(netPosition) + MathUtil.Epsilon;
         }
 
-        // Determines if a request is exit given a KNOWN net position.
+        // Determines if a request is an exit (direction AND quantity <= current position).
         public static bool IsExitForPosition(
             this IOrderRequestParameters orderRequestParameters,
             double netPosition
         )
         {
-            return orderRequestParameters.Side.IsExitForPosition(netPosition);
+            return orderRequestParameters.Side.IsExitDirection(netPosition)
+                   && orderRequestParameters.Quantity <= Math.Abs(netPosition) + MathUtil.Epsilon;
         }
 
         // Determines if an order is exit, handling potential race conditions
@@ -169,6 +170,7 @@ namespace AutoSizeStrategy
 
                 return success;
             }
+
             return false;
         }
 
@@ -180,7 +182,7 @@ namespace AutoSizeStrategy
                 double.TryParse(
                     value,
                     System.Globalization.NumberStyles.Float
-                        | System.Globalization.NumberStyles.AllowThousands,
+                    | System.Globalization.NumberStyles.AllowThousands,
                     System.Globalization.CultureInfo.InvariantCulture,
                     out result
                 )

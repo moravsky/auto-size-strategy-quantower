@@ -83,7 +83,7 @@ namespace AutoSizeStrategy.Tests
                         { "AutoLiquidateThresholdCurrentValue", "145500" },
                     },
                     4 // expectedQty: (150k - 145.5k) = $4,500 Risk Budget.
-                // 10% = $450. Stop $100/contract. Result = 4.
+                    // 10% = $450. Stop $100/contract. Result = 4.
                 );
 
                 // STATIC SCENARIO (Personal/Sim)
@@ -93,7 +93,7 @@ namespace AutoSizeStrategy.Tests
                     150_000, // balance
                     new Dictionary<string, string>(), // No Additional Info needed
                     150 // expectedQty: Risk 10% of 150k = $15,000.
-                // Stop $100/contract. Result = 150.
+                    // Stop $100/contract. Result = 150.
                 );
 
                 // EDGE CASE: TIGHT TRAILING STOP
@@ -106,7 +106,7 @@ namespace AutoSizeStrategy.Tests
                         { "AutoLiquidateThresholdCurrentValue", "149900" },
                     },
                     0 // expectedQty: Room is only $100. Risk 10% = $10.
-                // Stop is $100. $10 / $100 = 0.1 -> Rounds to 0.
+                    // Stop is $100. $10 / $100 = 0.1 -> Rounds to 0.
                 );
 
                 return data;
@@ -195,6 +195,7 @@ namespace AutoSizeStrategy.Tests
         }
 
         #endregion
+
         #region ProcessRequest ---------------------------------------------
 
         [Fact]
@@ -228,14 +229,14 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public void ProcessRequest_ReduceOnlyWrongSize_PassThrough()
+        public void ProcessRequest_PartialExit_PassThrough()
         {
             // Simulate a Long Position of 10 contracts
             _contextMock
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(10.0);
 
-            // Create a Sell Request (which is Reduce-Only for a Long position)
+            // Create a Sell Request (which is Exit for a Long position)
             var request = CreateValidRequest(quantity: 3, stopDistanceTicks: 20);
             request.Inner.Side = Side.Sell;
 
@@ -252,22 +253,24 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public void ProcessRequest_ReduceOnlyNoStop_PassThrough()
+        public void ProcessRequest_ExitNoStop_PassThrough()
         {
             // Simulate a Long Position of 10 contracts
             _contextMock
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(10.0);
 
-            // Create a Sell Request (which is Reduce-Only for a Long position)
-            var request = CreateValidRequest(quantity: 150, stopDistanceTicks: 20);
+            // CHANGE: Lower quantity to 10 so it's recognized as a pure exit!
+            var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
             request.Inner.Side = Side.Sell;
+
+            // Clear the stop loss to test that exits don't require stops
             request.StopLossItems.Clear();
 
             _engine.ProcessRequest(request);
 
-            // Quantity should remain 150, even though process request would set it to 0
-            Assert.Equal(150, request.Quantity);
+            // Quantity should remain 10, as the engine bypasses sizing for pure exits
+            Assert.Equal(10, request.Quantity);
 
             // Verify Log
             _loggerMock.Verify(
@@ -640,17 +643,17 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public async Task ProcessOrder_ReduceOnlyWrongSize_PassThrough()
+        public async Task ProcessOrder_ExitWrongSize_PassThrough()
         {
             // Simulate a Short Position of -10 contracts
             _contextMock
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(-10.0);
 
-            // Create a Buy Order (Reduce-Only for Short)
+            // Create a Buy Order (Exit for Short)
             var order = CreateMockOrder("id_reduce", 5);
             order.SetupGet(o => o.Side).Returns(Side.Buy);
-            // Simulate that the size is "wrong" according to risk to ensure it would be cancelled if not reduce-only
+            // Simulate that the size is "wrong" according to risk to ensure it would be cancelled if not Exit
             // (e.g. Risk calc might want 1 contract, but order is 5)
 
             await _engine.ProcessOrder(order.Object);
@@ -664,14 +667,14 @@ namespace AutoSizeStrategy.Tests
         }
 
         [Fact]
-        public async Task ProcessOrder_ReduceOnlyNoStop_PassThrough()
+        public async Task ProcessOrder_ExitNoStop_PassThrough()
         {
             // Simulate a Short Position of -10 contracts
             _contextMock
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(-10.0);
 
-            // Create a Buy Order (Reduce-Only for Short)
+            // Create a Buy Order (Exit for Short)
             var order = CreateMockOrder("id_reduce", 5);
             order.SetupGet(o => o.Side).Returns(Side.Buy);
             order.SetupGet(o => o.StopLossItems).Returns([]);

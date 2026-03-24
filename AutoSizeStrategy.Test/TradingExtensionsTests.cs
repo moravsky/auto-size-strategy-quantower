@@ -25,100 +25,105 @@ namespace AutoSizeStrategy.Tests
             Assert.Equal(expected, mock.Object.InferDrawdownMode());
         }
 
-        public static TheoryData<double, Side, bool> ReduceOnlyScenarios =>
-            new()
-            {
-                // position size, side, expected return
-                { 0.0, Side.Sell, false },
-                { 0.0, Side.Buy, false },
-                { 10.0, Side.Sell, true },
-                { 10.0, Side.Buy, false },
-                { -10.0, Side.Buy, true },
-                { -10.0, Side.Sell, false },
-            };
+        public static TheoryData<double, Side, bool> ExitDirectionScenarios => new()
+        {
+            // position size, side, expected return
+            { 0.0, Side.Sell, false },
+            { 0.0, Side.Buy, false },
+            { 10.0, Side.Sell, true },
+            { 10.0, Side.Buy, false },
+            { -10.0, Side.Buy, true },
+            { -10.0, Side.Sell, false },
+        };
 
         [Theory]
-        [MemberData(nameof(ReduceOnlyScenarios))]
-        public void IsExitForPosition_CalculatesCorrectly(
-            double netPosition,
-            Side side,
-            bool expected
-        )
+        [MemberData(nameof(ExitDirectionScenarios))]
+        public void IsExitDirection_CalculatesCorrectly(double netPosition, Side side, bool expected)
         {
-            // Verify Side extension
-            Assert.Equal(expected, side.IsExitForPosition(netPosition));
+            Assert.Equal(expected, side.IsExitDirection(netPosition));
+        }
 
+        public static TheoryData<double, Side, double, bool> ExitForPositionScenarios => new()
+        {
+            // netPos, side, orderQty, expected
+            { 10.0, Side.Sell, 5.0, true }, // Partial exit
+            { 10.0, Side.Sell, 10.0, true }, // Full exit
+            { 10.0, Side.Sell, 15.0, false }, // Flips position (not a pure exit)
+            { -10.0, Side.Buy, 5.0, true }, // Partial exit short
+            { -10.0, Side.Buy, 10.0, true }, // Full exit short
+            { -10.0, Side.Buy, 15.0, false }, // Flips position short
+            { 10.0, Side.Buy, 5.0, false }, // Adding to long position
+            { -10.0, Side.Sell, 5.0, false } // Adding to short position
+        };
+
+        [Theory]
+        [MemberData(nameof(ExitForPositionScenarios))]
+        public void IsExitForPosition_ChecksDirectionAndQuantity(
+            double netPosition, Side side, double orderQuantity, bool expected)
+        {
             // Verify IOrder extension
             var orderMock = new Mock<IOrder>();
             orderMock.SetupGet(o => o.Side).Returns(side);
+            orderMock.SetupGet(o => o.TotalQuantity).Returns(orderQuantity);
+
             Assert.Equal(expected, orderMock.Object.IsExitForPosition(netPosition));
 
             // Verify IOrderRequestParameters extension
             var requestMock = new Mock<IOrderRequestParameters>();
             requestMock.SetupGet(r => r.Side).Returns(side);
+            requestMock.SetupGet(r => r.Quantity).Returns(orderQuantity);
+
             Assert.Equal(expected, requestMock.Object.IsExitForPosition(netPosition));
         }
 
-        [Fact]
-        public async Task IsReduceOnlyAsync_FastPath_ReturnsImmediately()
+        public static TheoryData<double, double[], bool> ExitAsyncScenarios => new()
+        {
+            // orderQuantity, positionSequence, expectedResult
+
+            // FAST PATH: Position exists immediately. Order qty (10) <= Net Pos (10).
+            { 10.0, new[] { 10.0 }, true },
+
+            // DELAYED SUCCESS: Position starts at 0, then arrives at 10. Order qty (5) <= 10.
+            { 5.0, new[] { 0.0, 0.0, 10.0 }, true },
+
+            // OVER QUANTITY: Position arrives at 10, but Order qty (15) > 10 (Position Flip).
+            { 15.0, new[] { 0.0, 10.0 }, false },
+
+            // TIMEOUT (ENTRY ORDER): Position never arrives. Times out and returns false.
+            // We provide enough zeroes to outlast the short test timeout.
+            { 5.0, new[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, false }
+        };
+
+        [Theory]
+        [MemberData(nameof(ExitAsyncScenarios))]
+        public async Task IsExitAsync_Scenarios_CalculatesCorrectly(
+            double orderQuantity,
+            double[] positionSequence,
+            bool expected)
         {
             var contextMock = new Mock<IStrategyContext>();
             var orderMock = new Mock<IOrder>();
 
-            contextMock
-                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
-                .Returns(10.0);
-
             orderMock.SetupGet(o => o.Side).Returns(Side.Sell);
+            orderMock.SetupGet(o => o.TotalQuantity).Returns(orderQuantity);
 
-            bool result = await orderMock.Object.IsExitAsync(contextMock.Object);
-            Assert.True(result);
-        }
+            // Dynamically build the Moq return sequence based on the test data array
+            var sequenceSetup = contextMock.SetupSequence(c =>
+                c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()));
 
-        [Fact]
-        public async Task IsReduceOnlyAsync_DelayedPostionInfo_RetriesAndSucceeds()
-        {
-            var contextMock = new Mock<IStrategyContext>();
-            var orderMock = new Mock<IOrder>();
-            orderMock.SetupGet(o => o.Side).Returns(Side.Sell);
+            foreach (var pos in positionSequence)
+            {
+                sequenceSetup.Returns(pos);
+            }
 
-            contextMock
-                .SetupSequence(c =>
-                    c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>())
-                )
-                .Returns(0)
-                .Returns(0)
-                .Returns(10);
-
-            bool result = await orderMock.Object.IsExitAsync(
-                contextMock.Object,
-                maxWait: TimeSpan.FromMilliseconds(100),
-                retryInterval: TimeSpan.FromMilliseconds(10)
-            );
-
-            Assert.True(result);
-        }
-
-        [Fact]
-        public async Task IsReduceOnlyAsync_EntryOrder_ReturnsFalse()
-        {
-            var contextMock = new Mock<IStrategyContext>();
-            var orderMock = new Mock<IOrder>();
-            orderMock.SetupGet(o => o.Side).Returns(Side.Sell);
-
-            contextMock
-                .SetupSequence(c =>
-                    c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>())
-                )
-                .Returns(0); // no position
-
+            // We use tight timeouts so the timeout scenario doesn't slow down the test suite
             bool result = await orderMock.Object.IsExitAsync(
                 contextMock.Object,
                 maxWait: TimeSpan.FromMilliseconds(50),
-                retryInterval: TimeSpan.FromMilliseconds(20)
+                retryInterval: TimeSpan.FromMilliseconds(10)
             );
 
-            Assert.False(result);
+            Assert.Equal(expected, result);
         }
 
         public static TheoryData<string, double, double, double> OrderRequestParametersScenarios =>
