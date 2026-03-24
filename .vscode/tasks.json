@@ -2,16 +2,6 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"type": "dotrush.task",
-			"project": "${command:dotrush.activeProjectPath}",
-			"problemMatcher": "$msCompile",
-			"label": "dotrush: Build",
-			"group": {
-				"kind": "build",
-				"isDefault": false
-			}
-		},
-		{
 			"label": "build-debug",
 			"command": "dotnet",
 			"type": "process",
