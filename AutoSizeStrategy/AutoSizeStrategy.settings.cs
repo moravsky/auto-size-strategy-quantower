@@ -7,13 +7,14 @@ namespace AutoSizeStrategy
 {
     public partial class AutoSizeStrategy
     {
-        public Account CurrentAccount { get; set; } = Core.Accounts.FindTargetAccount();
         IAccount IStrategySettings.CurrentAccount =>
             CurrentAccount != null ? new AccountWrapper(CurrentAccount) : null;
 
         public double RiskPercent { get; set; } = 8.0;
+
         public MissingStopLossAction MissingStopLossAction { get; set; } =
             MissingStopLossAction.Reject;
+
         public double MinAccountBalanceOverride { get; set; } = 0.0;
         public int MinimumStopLossTicks { get; set; } = 20;
         public double CommissionMicro { get; set; } = 0.25;
@@ -21,7 +22,14 @@ namespace AutoSizeStrategy
         public double AverageSlippageTicks { get; set; } = 1.5;
         public double ClutchModeBudget { get; set; } = 1350.0;
         public double[] ClutchModeRisk { get; set; } = [0.25, 0.25, 1.00];
+        private string _accountId = Core.Accounts.FindTargetAccount()?.Id;
         private readonly List<SettingItem> _additionalSettings = [];
+
+        public Account CurrentAccount
+        {
+            get => Core.Accounts.FirstOrDefault(a => a.Id == _accountId);
+            set => _accountId = value?.Id;
+        }
 
         public override IList<SettingItem> Settings
         {
@@ -67,12 +75,12 @@ namespace AutoSizeStrategy
             )
             {
                 Description = """
-                    Determines behavior when an order is placed without a Stop Loss.
+                              Determines behavior when an order is placed without a Stop Loss.
 
-                    Reject: Instantly cancels the order.
-                    Ignore: Allows the order to pass to the broker without applying
-                    the auto-size risk math.
-                    """,
+                              Reject: Instantly cancels the order.
+                              Ignore: Allows the order to pass to the broker without applying
+                              the auto-size risk math.
+                              """,
             };
             missingStopLossActionSetting.PropertyChanged += (s, e) =>
             {
@@ -88,12 +96,12 @@ namespace AutoSizeStrategy
                 Minimum = 0.0,
                 Increment = 0.01,
                 Description = """
-                    Required for End of Day (EOD) drawdown accounts.
-                    Sets the hard floor balance where the account is busted.
+                              Required for End of Day (EOD) drawdown accounts.
+                              Sets the hard floor balance where the account is busted.
 
-                    Note: For Intraday or Static accounts, this overrides
-                    the broker's threshold.
-                    """,
+                              Note: For Intraday or Static accounts, this overrides
+                              the broker's threshold.
+                              """,
             };
             minBalanceSetting.PropertyChanged += (s, e) =>
                 this.MinAccountBalanceOverride = (double)minBalanceSetting.Value;
@@ -169,11 +177,11 @@ namespace AutoSizeStrategy
                 Increment = 0.01,
                 DecimalPlaces = 2,
                 Description = """
-                    The dollar amount reserved for 'Clutch Mode'.
+                              The dollar amount reserved for 'Clutch Mode'.
 
-                    This is a sequence of trades with elevated risk designed to
-                    bring the account out of a deep drawdown.
-                    """,
+                              This is a sequence of trades with elevated risk designed to
+                              bring the account out of a deep drawdown.
+                              """,
             };
             clutchModeBudgetSetting.PropertyChanged += (s, e) =>
                 this.ClutchModeBudget = (double)clutchModeBudgetSetting.Value;
@@ -184,12 +192,12 @@ namespace AutoSizeStrategy
             )
             {
                 Description = """
-                    A comma-separated list of risk multipliers used during Clutch Mode.
-                    Values must be between 0.01 and 1.0.
+                              A comma-separated list of risk multipliers used during Clutch Mode.
+                              Values must be between 0.01 and 1.0.
 
-                    Example: '0.25, 0.25, 1.0' means the first two trades risk 25%
-                    of the clutch budget, and the final trade risks the rest.
-                    """,
+                              Example: '0.25, 0.25, 1.0' means the first two trades risk 25%
+                              of the clutch budget, and the final trade risks the rest.
+                              """,
             };
             clutchModeRiskSequenceSetting.PropertyChanged += (s, e) =>
             {
