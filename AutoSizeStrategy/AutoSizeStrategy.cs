@@ -117,7 +117,7 @@ namespace AutoSizeStrategy
             }
             catch (Exception ex)
             {
-                LogError($"CoreNewRequest failed: {ex}");
+                LogError($"ProcessRequest failed: {ex}");
             }
         }
 
@@ -125,11 +125,11 @@ namespace AutoSizeStrategy
         {
             try
             {
-                strategyEngine.ProcessRequest(e.RequestParameters);
+                strategyEngine.ReportCompletedRequest(e.RequestParameters);
             }
             catch (Exception ex)
             {
-                LogError($"CoreNewPerformedRequest failed: {ex}");
+                LogError($"ReportCompletedRequest failed: {ex}");
             }
         }
 
