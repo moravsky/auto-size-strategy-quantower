@@ -29,8 +29,12 @@ namespace AutoSizeStrategy
 
         public Account CurrentAccount
         {
-            get => Core.Accounts.FirstOrDefault(a => a.Id == _accountId);
-            set => _accountId = value?.Id;
+            get => Core.Accounts.FirstOrDefault(a => a.Id == _accountId, field);
+            set
+            {
+                _accountId = value?.Id;
+                field = value;
+            }
         }
 
         public override IList<SettingItem> Settings
