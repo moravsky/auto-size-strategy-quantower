@@ -68,37 +68,6 @@ namespace AutoSizeStrategy
                    && orderRequestParameters.Quantity <= Math.Abs(netPosition) + MathUtil.Epsilon;
         }
 
-        // Determines if an order is exit, handling potential race conditions
-        // by polling the context until a position appears or timeout occurs.
-        public static async Task<bool> IsExitAsync(
-            this IOrder order,
-            IStrategyContext context,
-            TimeSpan? maxWait = null,
-            TimeSpan? retryInterval = null
-        )
-        {
-            var waitTime = maxWait ?? TimeSpan.FromMilliseconds(DefaultMaxWaitMs);
-            var pollTime = retryInterval ?? TimeSpan.FromMilliseconds(DefaultRetryIntervalMs);
-            var deadline = DateTime.UtcNow.Add(waitTime);
-
-            while (true)
-            {
-                double netPos = context.GetNetPositionQuantity(order.Account, order.Symbol);
-
-                if (Math.Abs(netPos) > MathUtil.Epsilon)
-                {
-                    return order.IsExitForPosition(netPos);
-                }
-
-                if (DateTime.UtcNow >= deadline)
-                {
-                    return false; // Assumed Naked Entry
-                }
-
-                await Task.Delay(pollTime);
-            }
-        }
-
         public static double GetLikelyFillPrice(
             this IOrderRequestParameters orderRequestParameters
         ) =>
@@ -122,9 +91,6 @@ namespace AutoSizeStrategy
                 _ => throw new NotSupportedException("Order type not supported"),
             };
 
-        public static bool InCancelSequence(this IOrder order) =>
-            !string.IsNullOrEmpty(order.OriginalStatus)
-            && order.OriginalStatus.Contains("cancel", StringComparison.InvariantCultureIgnoreCase);
 
         // This accepts ANY object T, as long as it can find the 'id'.
         // We need this, because we cannot create SDK Account type.

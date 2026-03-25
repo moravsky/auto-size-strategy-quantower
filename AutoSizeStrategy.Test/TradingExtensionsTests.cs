@@ -76,56 +76,6 @@ namespace AutoSizeStrategy.Tests
             Assert.Equal(expected, requestMock.Object.IsExitForPosition(netPosition));
         }
 
-        public static TheoryData<double, double[], bool> ExitAsyncScenarios => new()
-        {
-            // orderQuantity, positionSequence, expectedResult
-
-            // FAST PATH: Position exists immediately. Order qty (10) <= Net Pos (10).
-            { 10.0, new[] { 10.0 }, true },
-
-            // DELAYED SUCCESS: Position starts at 0, then arrives at 10. Order qty (5) <= 10.
-            { 5.0, new[] { 0.0, 0.0, 10.0 }, true },
-
-            // OVER QUANTITY: Position arrives at 10, but Order qty (15) > 10 (Position Flip).
-            { 15.0, new[] { 0.0, 10.0 }, false },
-
-            // TIMEOUT (ENTRY ORDER): Position never arrives. Times out and returns false.
-            // We provide enough zeroes to outlast the short test timeout.
-            { 5.0, new[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }, false }
-        };
-
-        [Theory]
-        [MemberData(nameof(ExitAsyncScenarios))]
-        public async Task IsExitAsync_Scenarios_CalculatesCorrectly(
-            double orderQuantity,
-            double[] positionSequence,
-            bool expected)
-        {
-            var contextMock = new Mock<IStrategyContext>();
-            var orderMock = new Mock<IOrder>();
-
-            orderMock.SetupGet(o => o.Side).Returns(Side.Sell);
-            orderMock.SetupGet(o => o.TotalQuantity).Returns(orderQuantity);
-
-            // Dynamically build the Moq return sequence based on the test data array
-            var sequenceSetup = contextMock.SetupSequence(c =>
-                c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()));
-
-            foreach (var pos in positionSequence)
-            {
-                sequenceSetup.Returns(pos);
-            }
-
-            // We use tight timeouts so the timeout scenario doesn't slow down the test suite
-            bool result = await orderMock.Object.IsExitAsync(
-                contextMock.Object,
-                maxWait: TimeSpan.FromMilliseconds(50),
-                retryInterval: TimeSpan.FromMilliseconds(10)
-            );
-
-            Assert.Equal(expected, result);
-        }
-
         public static TheoryData<string, double, double, double> OrderRequestParametersScenarios =>
             new()
             {

@@ -50,7 +50,6 @@ namespace AutoSizeStrategy
 
             Core.NewRequest += this.CoreNewRequest;
             Core.NewPerformedRequest += this.CoreNewPerformedRequest;
-            Core.OrderAdded += OnOrderAdded;
             Core.OrderRemoved += this.CoreOrderRemoved;
         }
 
@@ -132,26 +131,7 @@ namespace AutoSizeStrategy
                 LogError($"ReportCompletedRequest failed: {ex}");
             }
         }
-
-        private async void OnOrderAdded(Order order)
-        {
-            var cts = _shutdownCts;
-            if (_disposed || cts == null)
-                return;
-
-            try
-            {
-                var orderWrapper = new OrderWrapper(order);
-                await Task.Run(() => strategyEngine.ProcessOrder(orderWrapper), cts.Token);
-            }
-            catch (OperationCanceledException) { }
-            catch (ObjectDisposedException) { }
-            catch (Exception ex)
-            {
-                LogError($"OnOrderAdded failed for order {order.Id}: {ex}");
-            }
-        }
-
+        
         private async void CoreOrderRemoved(Order order)
         {
             var cts = _shutdownCts;
@@ -162,8 +142,12 @@ namespace AutoSizeStrategy
             {
                 await Task.Run(() => strategyEngine.ReportCancelledOrder(order.Id), cts.Token);
             }
-            catch (OperationCanceledException) { }
-            catch (ObjectDisposedException) { }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
             catch (Exception ex)
             {
                 LogError($"CoreOrderRemoved failed for order {order.Id}: {ex}");
@@ -177,7 +161,6 @@ namespace AutoSizeStrategy
                 return;
 
             Core.NewRequest -= this.CoreNewRequest;
-            Core.OrderAdded -= OnOrderAdded;
             Core.NewPerformedRequest -= this.CoreNewPerformedRequest;
             Core.OrderRemoved -= this.CoreOrderRemoved;
 

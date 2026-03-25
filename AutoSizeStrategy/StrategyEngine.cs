@@ -10,7 +10,6 @@ namespace AutoSizeStrategy
     public partial class StrategyEngine(IStrategyContext context) : IDisposable
     {
         private readonly TrackingSet<long> _processedRequests = new();
-        private readonly TrackingSet<string> _processedOrders = new();
 
         public void ProcessRequest(RequestParameters requestParameters)
         {
@@ -255,158 +254,9 @@ namespace AutoSizeStrategy
             // TODO: V2: Add UX override for drawdown mode
         }
 
-        public async Task ProcessOrder(IOrder order)
-        {
-            if (order.Status != OrderStatus.Opened)
-                return;
-
-            if (context.Settings.CurrentAccount == null)
-            {
-                context.Logger.LogError($"Target account not set, cannot continue");
-                return;
-            }
-
-            if (
-                context.Settings.CurrentAccount.InferDrawdownMode() == DrawdownMode.EndOfDay
-                && context.Settings.MinAccountBalanceOverride == 0
-            )
-            {
-                context.Logger.LogError(
-                    $"End of day drawdown accounts require Minimum Balance Override"
-                );
-                return;
-            }
-
-            // Check if this order is just a mesage from Rithmic about cancellation
-            if (order.InCancelSequence())
-            {
-                return;
-            }
-
-            // Check account filter
-            if (context.Settings.CurrentAccount.Id != order.Account.Id)
-            {
-                return;
-            }
-
-            // idempotency check
-            if (!_processedOrders.TryTrack(order.Id))
-                return;
-
-            // Check for exit
-            bool isExit = await order.IsExitAsync(context);
-            if (isExit)
-            {
-                context.Logger.LogInfo($"Passing exit order {order.Id} through unchanged");
-                return;
-            }
-
-            double netPosition = context.GetNetPositionQuantity(order.Account, order.Symbol);
-
-            // Check for stop loss
-            if (order.StopLossItems.Length == 0)
-            {
-                if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
-                {
-                    context.Logger.LogInfo($"Cancelling order {order.Id}: missing stop loss");
-                    context.TradingService.Cancel(order, useLeadingJitter: true);
-                    return;
-                }
-                else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
-                {
-                    context.Logger.LogInfo(
-                        $"Passing order {order.Id} without stop loss through unchanged due to settings"
-                    );
-                    return;
-                }
-                else
-                {
-                    throw new NotSupportedException(
-                        $"Unsupported MissingStopLossAction: {context.Settings.MissingStopLossAction}"
-                    );
-                }
-            }
-
-            // Infer drawdown mode
-            string accountId = order.Account.Id;
-            DrawdownMode drawdownMode = InferDrawdownMode(accountId);
-
-            var account = order.Account;
-
-            // Calculate risk capital
-            string calculationReason = "";
-            double riskCapital = RiskCalculator.CalculateRiskCapital(
-                account,
-                context.Settings.RiskPercent,
-                drawdownMode,
-                out calculationReason,
-                minAccountBalanceOverride: context.Settings.MinAccountBalanceOverride
-            );
-            if (riskCapital <= 0)
-            {
-                context.Logger.LogInfo(
-                    $"Risk=0 for {account.Id}. Reason: {calculationReason}. Cancelling Order {order.Id}"
-                );
-                // If risk is 0, we can't trade.
-                context.TradingService.Cancel(order, useLeadingJitter: true);
-                return;
-            }
-
-            // Get symbol data
-            var symbol = order.Symbol;
-            double entryPrice = order.GetLikelyFillPrice();
-            double tickSize = symbol.TickSize;
-            double tickValue = symbol.GetTickCost(entryPrice);
-            if (!double.IsFinite(tickValue) || tickValue <= 0)
-            {
-                context.Logger.LogError(
-                    $"Symbol {symbol.Id} tick value unavailable ({tickValue}), cancelling order {order.Id}"
-                );
-                context.TradingService.Cancel(order, useLeadingJitter: true);
-                return;
-            }
-
-            // Caculate stop loss price
-            var slTpHolder = order.StopLossItems[0];
-            double stopDistanceTicks = RiskCalculator.GetStopDistanceTicks(
-                slTpHolder,
-                tickSize,
-                entryPrice
-            );
-
-            // Calculate position size
-            int calculatedSize = RiskCalculator.CalculatePositionSize(
-                riskCapital,
-                stopDistanceTicks,
-                tickValue
-            );
-
-            int remainingCapacity;
-            // If the order is in the opposite direction of our current position (a reversal/exit)
-            if (order.Side.IsExitDirection(netPosition))
-            {
-                // Capacity = The amount needed to flatten + the max allowed risk in the new direction
-                remainingCapacity = (int)Math.Abs(netPosition) + calculatedSize;
-            }
-            else
-            {
-                // Pyramiding: Capacity = Max allowed risk - what we already hold
-                remainingCapacity = calculatedSize - (int)Math.Abs(netPosition);
-            }
-
-            if (order.TotalQuantity > remainingCapacity)
-            {
-                context.Logger.LogInfo(
-                    $"Cancelling Order {order.Id}. Size {order.TotalQuantity} exceeds remaining capacity {remainingCapacity} (target={calculatedSize}, position={Math.Abs(netPosition)})."
-                );
-                context.TradingService.Cancel(order, useLeadingJitter: true);
-            }
-        }
-
         public void Dispose()
         {
             context.Dispose();
-            _processedOrders.Dispose();
             _processedRequests.Dispose();
             GC.SuppressFinalize(this);
         }
