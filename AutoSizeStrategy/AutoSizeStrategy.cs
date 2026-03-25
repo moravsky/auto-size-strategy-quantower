@@ -34,8 +34,7 @@ namespace AutoSizeStrategy
             }
 
             if (
-                ((IStrategySettings)this).CurrentAccount.InferDrawdownMode()
-                    == DrawdownMode.EndOfDay
+                DrawdownMode == DrawdownMode.EndOfDay
                 && MinAccountBalanceOverride == 0
             )
             {

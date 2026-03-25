@@ -45,6 +45,7 @@ namespace AutoSizeStrategy.Tests
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
             _settingsMock.SetupGet(s => s.MaxContractsMicro).Returns(0);
             _settingsMock.SetupGet(s => s.MaxContractsMini).Returns(0);
+            _settingsMock.SetupGet(s => s.DrawdownMode).Returns(DrawdownMode.Static);
 
             _metrics = new Metrics(_settingsMock.Object);
             _contextMock.SetupGet(c => c.Metrics).Returns(_metrics);
@@ -129,6 +130,10 @@ namespace AutoSizeStrategy.Tests
             _accountMock.SetupGet(a => a.Balance).Returns(balance);
             _accountMock.SetupGet(a => a.AdditionalInfo).Returns(additionalInfo);
 
+            // Infer the mode from account ID to match what the settings UI would default to
+            var tempAccount = _accountMock.Object;
+            _settingsMock.SetupGet(s => s.DrawdownMode).Returns(tempAccount.InferDrawdownMode());
+
             // Stop: 5 pts = 20 ticks. Value: 20 ticks * $5 = $100 risk per contract.
             var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
 
@@ -141,6 +146,7 @@ namespace AutoSizeStrategy.Tests
         public void ProcessRequest_EOD_UsesOverride_WhenSet()
         {
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(147_966.0);
+            _settingsMock.SetupGet(s => s.DrawdownMode).Returns(DrawdownMode.EndOfDay);
             _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
             _accountMock.SetupGet(a => a.Balance).Returns(151_438.25);
             _accountMock.SetupGet(a => a.AdditionalInfo).Returns(new Dictionary<string, string>());
@@ -175,6 +181,7 @@ namespace AutoSizeStrategy.Tests
         public void ProcessRequest_EOD_NoOverride_LogsErrorAndReturns()
         {
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
+            _settingsMock.SetupGet(s => s.DrawdownMode).Returns(DrawdownMode.EndOfDay);
             _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
             _accountMock.SetupGet(a => a.Balance).Returns(151_438.25);
             _accountMock.SetupGet(a => a.AdditionalInfo).Returns(new Dictionary<string, string>());

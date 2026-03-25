@@ -29,7 +29,7 @@ namespace AutoSizeStrategy
             }
 
             if (
-                context.Settings.CurrentAccount.InferDrawdownMode() == DrawdownMode.EndOfDay
+                context.Settings.DrawdownMode == DrawdownMode.EndOfDay
                 && context.Settings.MinAccountBalanceOverride == 0
             )
             {
@@ -87,7 +87,7 @@ namespace AutoSizeStrategy
             }
 
             string accountId = orderRequestParameters.Account.Id;
-            DrawdownMode drawdownMode = InferDrawdownMode(accountId);
+            DrawdownMode drawdownMode = context.Settings.DrawdownMode;
 
             var account = orderRequestParameters.Account;
 
@@ -109,7 +109,7 @@ namespace AutoSizeStrategy
             string calculationReason1 = "";
             var drawdown = RiskCalculator.GetAvailableDrawdown(
                 account,
-                account.InferDrawdownMode(),
+                context.Settings.DrawdownMode,
                 out calculationReason1,
                 context.Settings.MinAccountBalanceOverride
             );
@@ -209,7 +209,7 @@ namespace AutoSizeStrategy
                 );
 
                 //  CancelReplace is going to cancel current buy/sell order and create new one.
-                // We should cancel the modify order, becuase it's job is already done.
+                //  We should cancel the modify order, becuase it's job is already done.
                 orderRequestParameters.Quantity = 0;
                 return;
             }
@@ -231,16 +231,6 @@ namespace AutoSizeStrategy
         public void ReportCancelledOrder(string orderId)
         {
             context.TradingService.ReportCancelledOrder(orderId);
-        }
-
-        private static DrawdownMode InferDrawdownMode(string accountId)
-        {
-            if (TradingExtensions.IntradayAccountPattern().IsMatch(accountId))
-                return DrawdownMode.Intraday;
-            else if (TradingExtensions.EndOfDayAccountPattern().IsMatch(accountId))
-                return DrawdownMode.EndOfDay;
-            else
-                return DrawdownMode.Static;
         }
 
         public void Dispose()

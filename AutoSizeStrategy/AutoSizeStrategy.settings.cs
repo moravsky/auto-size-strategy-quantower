@@ -24,6 +24,7 @@ namespace AutoSizeStrategy
         public double[] ClutchModeRisk { get; set; } = [0.25, 0.25, 1.00];
         public int MaxContractsMicro { get; set; } = 0;
         public int MaxContractsMini { get; set; } = 0;
+        public DrawdownMode DrawdownMode { get; set; } = DrawdownMode.Static;
         private string _accountId = Core.Accounts.FindTargetAccount()?.Id;
         private readonly List<SettingItem> _additionalSettings = [];
 
@@ -55,9 +56,55 @@ namespace AutoSizeStrategy
 
         private void InitializeRiskManagementGroup()
         {
+            var drawdownModeVariants = new List<SelectItem>
+            {
+                new("Intraday (Trailing)", DrawdownMode.Intraday),
+                new("End of Day", DrawdownMode.EndOfDay),
+                new("Static", DrawdownMode.Static),
+            };
+
+            DrawdownMode = CurrentAccount != null
+                ? new AccountWrapper(CurrentAccount).InferDrawdownMode()
+                : DrawdownMode.Static;
+
+            var drawdownModeSetting = new SettingItemSelectorLocalized(
+                "Drawdown Mode",
+                drawdownModeVariants.First(v => (DrawdownMode)v.Value == DrawdownMode),
+                drawdownModeVariants
+            )
+            {
+                Description = """
+                              How available risk capital is calculated.
+
+                              Intraday (Trailing): Uses the broker's trailing drawdown threshold
+                              (e.g. TPT PRO accounts). Risk capital = Balance - AutoLiquidateThreshold.
+
+                              End of Day: Uses Minimum Balance Override as the floor.
+                              Risk capital = Balance - Minimum Balance Override.
+
+                              Static: Threshold does not move.
+                              Suitable for personal/cash accounts with no drawdown rules.
+                              """,
+            };
+            drawdownModeSetting.PropertyChanged += (s, e) =>
+            {
+                if (drawdownModeSetting.Value is SelectItem si)
+                    this.DrawdownMode = (DrawdownMode)si.Value;
+            };
+
             var accountSetting = new SettingItemAccount("Account", this.CurrentAccount);
-            accountSetting.PropertyChanged += (s, e) =>
-                this.CurrentAccount = accountSetting.Value as Account;
+            accountSetting.PropertyChanged += (_, _) =>
+            {
+                CurrentAccount = accountSetting.Value as Account;
+                DrawdownMode = ((IStrategySettings)this).CurrentAccount?.InferDrawdownMode()
+                               ?? DrawdownMode.Static;
+
+                var matchingItem = drawdownModeVariants.FirstOrDefault(v => (DrawdownMode)v.Value == DrawdownMode);
+                if (matchingItem != null)
+                {
+                    drawdownModeSetting.Value = matchingItem;
+                }
+            };
 
             var riskPercentSetting = new SettingItemDouble("Risk Percent", this.RiskPercent)
             {
@@ -149,6 +196,7 @@ namespace AutoSizeStrategy
                     "Risk Management",
                     [
                         accountSetting,
+                        drawdownModeSetting,
                         riskPercentSetting,
                         missingStopLossActionSetting,
                         minBalanceSetting,

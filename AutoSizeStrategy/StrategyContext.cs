@@ -31,6 +31,7 @@ namespace AutoSizeStrategy
         double[] ClutchModeRisk { get; }
         int MaxContractsMicro { get; }
         int MaxContractsMini { get; }
+        DrawdownMode DrawdownMode { get; }
     }
 
     public interface IStrategyContext : IDisposable
