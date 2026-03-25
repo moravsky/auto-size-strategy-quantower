@@ -13,10 +13,7 @@ namespace AutoSizeStrategy
 
         public void ProcessRequest(RequestParameters requestParameters)
         {
-            // Delegate the "selection logic" to our Factory
             var wrapper = RequestParametersWrapper.Create(requestParameters);
-
-            // Pass the result to the main logic
             ProcessRequest(wrapper);
         }
 
@@ -42,11 +39,8 @@ namespace AutoSizeStrategy
                 return;
             }
 
-            // Check account filter
             if (context.Settings.CurrentAccount.Id != orderRequestParameters.Account.Id)
-            {
                 return;
-            }
 
             // Idempotency check
             if (!_processedRequests.TryTrack(orderRequestParameters.RequestId))
@@ -57,7 +51,6 @@ namespace AutoSizeStrategy
                 return;
             }
 
-            // Check for exit
             double netPosition = context.GetNetPositionQuantity(
                 orderRequestParameters.Account,
                 orderRequestParameters.Symbol
@@ -71,7 +64,6 @@ namespace AutoSizeStrategy
                 return;
             }
 
-            // Check for stop loss
             if (
                 orderRequestParameters.StopLossItems == null
                 || orderRequestParameters.StopLossItems.Count == 0
@@ -94,14 +86,11 @@ namespace AutoSizeStrategy
                 }
             }
 
-            // Infer drawdown mode
             string accountId = orderRequestParameters.Account.Id;
             DrawdownMode drawdownMode = InferDrawdownMode(accountId);
 
-            // Wrap account
             var account = orderRequestParameters.Account;
 
-            // Calculate risk capital
             string calculationReason = "";
             double riskCapital = RiskCalculator.CalculateRiskCapital(
                 account,
@@ -113,8 +102,6 @@ namespace AutoSizeStrategy
             if (riskCapital <= 0)
             {
                 context.Logger.LogInfo($"Risk=0 for {account.Id}. Reason: {calculationReason}");
-                // If risk is 0, we can't trade.
-                // For Request: Set Qty to 0 (Cancel)
                 orderRequestParameters.Quantity = 0;
                 return;
             }
@@ -130,7 +117,6 @@ namespace AutoSizeStrategy
                 $"Account balance:{account.Balance} drawdown: {drawdown} risk capital:{riskCapital}"
             );
 
-            // Get symbol data
             var symbol = orderRequestParameters.Symbol;
             double entryPrice = orderRequestParameters.GetLikelyFillPrice();
             double tickSize = symbol.TickSize;
@@ -144,7 +130,6 @@ namespace AutoSizeStrategy
                 return;
             }
 
-            // Caculate stop loss price
             var slTpHolder = orderRequestParameters.StopLossItems[0];
             double stopDistanceTicks = RiskCalculator.GetStopDistanceTicks(
                 slTpHolder,
@@ -152,16 +137,26 @@ namespace AutoSizeStrategy
                 entryPrice
             );
 
-            // Update symbol context for metrics
             context.Metrics.LastSymbol = symbol;
             context.Metrics.LastStopDistanceTicks = stopDistanceTicks;
 
-            // Calculate position size
             int calculatedSize = RiskCalculator.CalculatePositionSize(
                 riskCapital,
                 stopDistanceTicks,
                 tickValue
             );
+
+            // Apply max contracts cap (0 = disabled)
+            int sizeCap = symbol.IsMicro()
+                ? context.Settings.MaxContractsMicro
+                : context.Settings.MaxContractsMini;
+            if (sizeCap > 0 && calculatedSize > sizeCap)
+            {
+                context.Logger.LogInfo(
+                    $"Capping calculatedSize from {calculatedSize} to {sizeCap} (Max Contracts limit)"
+                );
+                calculatedSize = sizeCap;
+            }
 
             if (calculatedSize == 0)
             {
@@ -213,7 +208,8 @@ namespace AutoSizeStrategy
                     IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, remainingCapacity)
                 );
 
-                // Set current request quantity to 0 to kill the native SDK modification
+                //  CancelReplace is going to cancel current buy/sell order and create new one.
+                // We should cancel the modify order, becuase it's job is already done.
                 orderRequestParameters.Quantity = 0;
                 return;
             }
@@ -240,18 +236,11 @@ namespace AutoSizeStrategy
         private static DrawdownMode InferDrawdownMode(string accountId)
         {
             if (TradingExtensions.IntradayAccountPattern().IsMatch(accountId))
-            {
                 return DrawdownMode.Intraday;
-            }
             else if (TradingExtensions.EndOfDayAccountPattern().IsMatch(accountId))
-            {
                 return DrawdownMode.EndOfDay;
-            }
             else
-            {
                 return DrawdownMode.Static;
-            }
-            // TODO: V2: Add UX override for drawdown mode
         }
 
         public void Dispose()

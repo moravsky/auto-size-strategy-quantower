@@ -22,6 +22,8 @@ namespace AutoSizeStrategy
         public double AverageSlippageTicks { get; set; } = 1.5;
         public double ClutchModeBudget { get; set; } = 1350.0;
         public double[] ClutchModeRisk { get; set; } = [0.25, 0.25, 1.00];
+        public int MaxContractsMicro { get; set; } = 0;
+        public int MaxContractsMini { get; set; } = 0;
         private string _accountId = Core.Accounts.FindTargetAccount()?.Id;
         private readonly List<SettingItem> _additionalSettings = [];
 
@@ -106,6 +108,38 @@ namespace AutoSizeStrategy
             minBalanceSetting.PropertyChanged += (s, e) =>
                 this.MinAccountBalanceOverride = (double)minBalanceSetting.Value;
 
+            var maxContractsMicroSetting = new SettingItemInteger(
+                "Max Contracts (Micro)",
+                this.MaxContractsMicro
+            )
+            {
+                Minimum = 0,
+                Increment = 1,
+                Description = """
+                              Hard cap on position size for micro contracts (MNQ, MGC, etc.).
+                              Prevents excessive sizing from tight stops or large account balances.
+                              Set to 0 to disable.
+                              """,
+            };
+            maxContractsMicroSetting.PropertyChanged += (s, e) =>
+                this.MaxContractsMicro = (int)maxContractsMicroSetting.Value;
+
+            var maxContractsMiniSetting = new SettingItemInteger(
+                "Max Contracts (Mini)",
+                this.MaxContractsMini
+            )
+            {
+                Minimum = 0,
+                Increment = 1,
+                Description = """
+                              Hard cap on position size for mini contracts (NQ, GC, etc.).
+                              Prevents excessive sizing from tight stops or large account balances.
+                              Set to 0 to disable.
+                              """,
+            };
+            maxContractsMiniSetting.PropertyChanged += (s, e) =>
+                this.MaxContractsMini = (int)maxContractsMiniSetting.Value;
+
             _additionalSettings.Add(
                 new SettingItemGroup(
                     "Risk Management",
@@ -114,6 +148,8 @@ namespace AutoSizeStrategy
                         riskPercentSetting,
                         missingStopLossActionSetting,
                         minBalanceSetting,
+                        maxContractsMicroSetting,
+                        maxContractsMiniSetting,
                     ]
                 )
             );

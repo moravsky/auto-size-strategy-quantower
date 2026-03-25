@@ -43,6 +43,8 @@ namespace AutoSizeStrategy.Tests
                 .SetupGet(s => s.MissingStopLossAction)
                 .Returns(MissingStopLossAction.Reject);
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
+            _settingsMock.SetupGet(s => s.MaxContractsMicro).Returns(0);
+            _settingsMock.SetupGet(s => s.MaxContractsMini).Returns(0);
 
             _metrics = new Metrics(_settingsMock.Object);
             _contextMock.SetupGet(c => c.Metrics).Returns(_metrics);
@@ -52,6 +54,7 @@ namespace AutoSizeStrategy.Tests
             _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
 
             // Default Symbol (MES-like)
+            _symbolMock.SetupGet(s => s.Id).Returns("MES");
             _symbolMock.SetupGet(s => s.TickSize).Returns(0.25);
             _symbolMock.SetupGet(s => s.Last).Returns(5000.0);
             _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5); // $5/tick
@@ -557,6 +560,54 @@ namespace AutoSizeStrategy.Tests
                 Times.Once
             );
             Assert.Equal(0, request.Quantity);
+        }
+
+        [Theory]
+        // (sizeCap, symbolId, netPosition, expectedQty, expectCapLog)
+        // calculatedSize = 150 (balance $150k, risk 10%, stop 20 ticks * $5/tick)
+
+        // Cap disabled
+        [InlineData(0, "MNQ", 0, 150, false)] // Micro, disabled -> uncapped
+        [InlineData(0, "NQ", 0, 150, false)] // Mini, disabled -> uncapped
+
+        // Cap below calculatedSize
+        [InlineData(50, "MNQ", 0, 50, true)] // Micro, cap hit -> clamped
+        [InlineData(50, "NQ", 0, 50, true)] // Mini, cap hit -> clamped
+
+        // Cap above calculatedSize
+        [InlineData(200, "MNQ", 0, 150, false)] // Micro, cap not hit -> uncapped
+
+        // Pyramiding off capped size: cap=10, position=7 -> remaining=3
+        [InlineData(10, "MNQ", 7, 3, true)]
+
+        // Position already at cap: cap=10, position=10 -> cancel (qty=0)
+        [InlineData(10, "MNQ", 10, 0, true)]
+        public void ProcessRequest_MaxContractsCap_Scenarios(
+            int sizeCap,
+            string symbolId,
+            double netPosition,
+            double expectedQty,
+            bool expectCapLog)
+        {
+            _settingsMock.SetupGet(s => s.MaxContractsMicro)
+                .Returns(symbolId.StartsWith("M") ? sizeCap : 0);
+            _settingsMock.SetupGet(s => s.MaxContractsMini)
+                .Returns(symbolId.StartsWith("M") ? 0 : sizeCap);
+            _symbolMock.SetupGet(s => s.Id).Returns(symbolId);
+
+            _contextMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(netPosition);
+
+            var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
+
+            _engine.ProcessRequest(request);
+
+            Assert.Equal(expectedQty, request.Quantity);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Capping calculatedSize"))),
+                expectCapLog ? Times.Once() : Times.Never()
+            );
         }
 
         #endregion

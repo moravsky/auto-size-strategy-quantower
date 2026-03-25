@@ -88,6 +88,15 @@ For minor releases do Part 1 on a replay connection and Part 2 on a live connect
 | <input type="checkbox"> | F4 | Undersized entry passes through | No open position. Place buy limit order for qty=1 when calculatedSize > 1 | Order passes through at qty=1. No cancellation, no resize |
 | <input type="checkbox">|	F5 |	Position Flip / Reversal |	Enter long via market order for qty=2. Place a sell order for qty=1000 with a SL. | Order is resized to (2 + calculatedSize). Log shows resize. Position successfully flips to short at target capacity.
 
+### Test Suite G: Max Contracts Cap
+
+Setup: Risk Percent 10%, balance $150K static account (uncapped calculatedSize = 150 @ 20-tick stop).
+
+| Done | # | Test Case | Steps | Expected Result |
+|------|---|-----------|-------|-----------------|
+| <input type="checkbox"> | G1 | Cap below calculated size | Set Max Contracts (Micro) to 50. Place MNQ order qty=1 with 20-tick SL | Order capped at 50. Log shows "Capping calculatedSize from 150 to 50". |
+| <input type="checkbox"> | G2 | Micro and mini caps are independent | Set Max Contracts (Micro)=50, Max Contracts (Mini)=5. Place NQ order, then MNQ order | NQ capped at 5, MNQ capped at 50. Each uses its own setting. |
+
 
 ### Test Suite M: Miscellaneous
 

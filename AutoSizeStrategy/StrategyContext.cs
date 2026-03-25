@@ -29,6 +29,8 @@ namespace AutoSizeStrategy
         double AverageSlippageTicks { get; }
         double ClutchModeBudget { get; }
         double[] ClutchModeRisk { get; }
+        int MaxContractsMicro { get; }
+        int MaxContractsMini { get; }
     }
 
     public interface IStrategyContext : IDisposable
@@ -68,7 +70,6 @@ namespace AutoSizeStrategy
             if (position == null)
                 return 0;
 
-            // Convert to signed quantity: Buy is positive, Sell is negative
             return position.Side == Side.Buy ? position.Quantity : -position.Quantity;
         }
 
