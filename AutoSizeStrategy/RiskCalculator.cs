@@ -94,6 +94,11 @@ namespace AutoSizeStrategy
                 MidpointRounding.AwayFromZero
             );
 
+            if (stopDistanceTicks <= 0)
+            {
+                return 0;
+            }
+
             // Calculate position size
             return CalculatePositionSize(riskCapital, stopDistanceTicks, tickValue);
         }

@@ -69,6 +69,9 @@ namespace AutoSizeStrategy.Test
         // BARELY ENOUGH: Risk $100. Stop 5pts ES ($100 risk).
         // Result: Exact match = 1.
         [InlineData(100, 4105, 4100, 0.25, 5, 1)]
+        // STOP AT ENTRY: Risk $100. Stop 0pts ES.
+        // Result: Not allowed in UI, should return 0 -> cancel request
+        [InlineData(100, 4100, 4100, 0.25, 5, 0)]
         public void CalculatePositionSize5_Scenarios_ReturnCorrectSize(
             double riskCapital,
             double entryPrice,
