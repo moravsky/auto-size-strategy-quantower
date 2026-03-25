@@ -5,15 +5,15 @@ using System.Threading.Tasks;
 
 namespace AutoSizeStrategy
 {
-    public record Expiration(DateTime Time, TaskCompletionSource<bool> Completion) { }
+    public record Expiration(DateTime Time, TaskCompletionSource<bool> Completion);
 
     /// Thread-safe set for tracking items with automatic expiration
     /// Used for idempotency checks and preventing duplicate operations.
     public class TrackingSet<T> : IDisposable
         where T : notnull
     {
-        private static readonly TimeSpan DefaultCleanupInterval = TimeSpan.FromMilliseconds(200);
-        private static readonly TimeSpan DefaultExpirationTime = TimeSpan.FromSeconds(5);
+        private const int DefaultCleanupIntervalMs = 200;
+        private const int DefaultExpirationTimeMs = 5000;
         private const int DefaultWaitTimeoutMs = 5000;
 
         private readonly ConcurrentDictionary<T, Expiration> _tracked = new();
@@ -23,8 +23,8 @@ namespace AutoSizeStrategy
 
         public TrackingSet(TimeSpan? cleanupInterval = null, TimeSpan? defaultExpirationTime = null)
         {
-            _defaultExpirationTime = defaultExpirationTime ?? DefaultExpirationTime;
-            _ = RunCleanupLoop(cleanupInterval ?? DefaultCleanupInterval);
+            _defaultExpirationTime = defaultExpirationTime ?? TimeSpan.FromMilliseconds(DefaultExpirationTimeMs);
+            _ = RunCleanupLoop(cleanupInterval ?? TimeSpan.FromMilliseconds(DefaultCleanupIntervalMs));
         }
 
         public bool TryTrack(T key, DateTime expirationDate)
@@ -56,7 +56,7 @@ namespace AutoSizeStrategy
 
             if (completedTask == expiration.Completion.Task)
             {
-                cts.Cancel(); // Clean up the timer immediately
+                await cts.CancelAsync(); // Clean up the timer immediately
                 return await expiration.Completion.Task; // Return the actual result (true/false)
             }
 
@@ -81,7 +81,6 @@ namespace AutoSizeStrategy
 
         public bool TryRemove(T key)
         {
-            Expiration _;
             return TryRemove(key, out _);
         }
 

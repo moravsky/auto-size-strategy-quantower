@@ -1,11 +1,7 @@
-using System;
-using System.Threading.Tasks;
-using AutoSizeStrategy;
 using Moq;
 using TradingPlatform.BusinessLayer;
-using Xunit;
 
-namespace AutoSizeStrategy.Tests
+namespace AutoSizeStrategy.Test
 {
     public class TradingExtensionsTests
     {
@@ -288,9 +284,7 @@ namespace AutoSizeStrategy.Tests
         [Fact]
         public void FindTargetAccount_Returns_Null_For_Empty_List()
         {
-            var accounts = new List<TestAccount>();
-
-            var result = accounts.FindTargetAccount();
+            var result = new List<TestAccount>([]).FindTargetAccount();
 
             Assert.Null(result);
         }

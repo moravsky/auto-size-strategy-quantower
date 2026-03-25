@@ -51,7 +51,7 @@ namespace AutoSizeStrategy
         Func<IEnumerable<IPosition>> PositionProvider
     ) : IStrategyContext
     {
-        private bool _disposed = false;
+        private bool _disposed;
 
         // TODO: V3: Introduce DI container for pluggable logic
         public StrategyContext(AutoSizeStrategy autoSizeStrategy, Metrics metrics)

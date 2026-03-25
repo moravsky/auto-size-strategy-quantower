@@ -1,9 +1,6 @@
 using System.Runtime.CompilerServices;
-using System.Threading;
-using AutoSizeStrategy;
 using Moq;
 using TradingPlatform.BusinessLayer;
-using Xunit;
 
 namespace AutoSizeStrategy.Test
 {
@@ -58,14 +55,14 @@ namespace AutoSizeStrategy.Test
 
             var stopLossItems = new List<SlTpHolder>()
             {
-                SlTpHolder.CreateSL(4995, PriceMeasurement.Absolute),
+                SlTpHolder.CreateSL(4995),
                 SlTpHolder.CreateSL(40, PriceMeasurement.Offset),
             };
             modifyMock.SetupGet(m => m.StopLossItems).Returns(stopLossItems);
 
             var takeProfitItems = new List<SlTpHolder>()
             {
-                SlTpHolder.CreateTP(5005, PriceMeasurement.Absolute),
+                SlTpHolder.CreateTP(5005),
                 SlTpHolder.CreateTP(40, PriceMeasurement.Offset),
             };
             modifyMock.SetupGet(m => m.TakeProfitItems).Returns(takeProfitItems);
@@ -99,7 +96,7 @@ namespace AutoSizeStrategy.Test
             sl.Quantity = 1; // Start with wrong quantity
 
             // Act: Set StopLoss then Quantity
-            wrapper.StopLossItems = new List<SlTpHolder> { sl };
+            wrapper.StopLossItems = [sl];
             wrapper.Quantity = 5;
 
             // Assert

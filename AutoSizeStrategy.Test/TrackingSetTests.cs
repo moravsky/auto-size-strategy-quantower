@@ -1,8 +1,4 @@
-using System;
-using System.Threading.Tasks;
-using Xunit;
-
-namespace AutoSizeStrategy.Tests
+namespace AutoSizeStrategy.Test
 {
     public class TrackingSetTests
     {

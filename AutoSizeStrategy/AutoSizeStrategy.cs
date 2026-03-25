@@ -15,8 +15,8 @@ namespace AutoSizeStrategy
             IDisposable
     {
         private bool _disposed;
-        private StrategyEngine strategyEngine;
-        private Metrics metrics;
+        private StrategyEngine _strategyEngine;
+        private Metrics _metrics;
         private CancellationTokenSource _shutdownCts;
 
         public AutoSizeStrategy()
@@ -38,14 +38,14 @@ namespace AutoSizeStrategy
                 && MinAccountBalanceOverride == 0
             )
             {
-                LogError($"End of day drawdown accounts require Minimum Balance Override");
+                LogError("End of day drawdown accounts require Minimum Balance Override");
                 return;
             }
 
             _shutdownCts = new CancellationTokenSource();
-            this.metrics = new Metrics(this);
-            var context = new StrategyContext(this, this.metrics);
-            this.strategyEngine = new StrategyEngine(context);
+            this._metrics = new Metrics(this);
+            var context = new StrategyContext(this, this._metrics);
+            this._strategyEngine = new StrategyEngine(context);
 
             Core.NewRequest += this.CoreNewRequest;
             Core.NewPerformedRequest += this.CoreNewPerformedRequest;
@@ -65,10 +65,10 @@ namespace AutoSizeStrategy
 
             try
             {
-                if (metrics == null)
+                if (_metrics == null)
                     return result;
 
-                var m = metrics.GetAccountMetrics();
+                var m = _metrics.GetAccountMetrics();
 
                 result.Add(
                     new StrategyMetric
@@ -111,7 +111,7 @@ namespace AutoSizeStrategy
         {
             try
             {
-                strategyEngine.ProcessRequest(e.RequestParameters);
+                _strategyEngine.ProcessRequest(e.RequestParameters);
             }
             catch (Exception ex)
             {
@@ -123,29 +123,27 @@ namespace AutoSizeStrategy
         {
             try
             {
-                strategyEngine.ReportCompletedRequest(e.RequestParameters);
+                _strategyEngine.ReportCompletedRequest(e.RequestParameters);
             }
             catch (Exception ex)
             {
                 LogError($"ReportCompletedRequest failed: {ex}");
             }
         }
-        
+
         private async void CoreOrderRemoved(Order order)
         {
-            var cts = _shutdownCts;
-            if (_disposed || cts == null)
-                return;
-
             try
             {
-                await Task.Run(() => strategyEngine.ReportCancelledOrder(order.Id), cts.Token);
+                var cts = _shutdownCts;
+                if (_disposed || cts == null)
+                    return;
+                
+                await Task.Run(() => _strategyEngine.ReportCancelledOrder(order.Id), cts.Token);
             }
-            catch (OperationCanceledException)
+            catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
             {
-            }
-            catch (ObjectDisposedException)
-            {
+                // Graceful shutdown, safely ignore
             }
             catch (Exception ex)
             {
@@ -166,9 +164,9 @@ namespace AutoSizeStrategy
             _shutdownCts.Cancel();
             _shutdownCts.Dispose();
             _shutdownCts = null;
-            strategyEngine?.Dispose();
-            strategyEngine = null;
-            metrics = null;
+            _strategyEngine?.Dispose();
+            _strategyEngine = null;
+            _metrics = null;
         }
 
         protected override void OnRemove() => Dispose();
@@ -191,6 +189,6 @@ namespace AutoSizeStrategy
 
         public void LogError(string message) => Log(message, StrategyLoggingLevel.Error);
 
-        public void LogInfo(string message) => Log(message, StrategyLoggingLevel.Info);
+        public void LogInfo(string message) => Log(message);
     }
 }

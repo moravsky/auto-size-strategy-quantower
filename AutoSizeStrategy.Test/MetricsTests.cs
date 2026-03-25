@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using AutoSizeStrategy;
 using Moq;
-using TradingPlatform.BusinessLayer;
-using Xunit;
 
 namespace AutoSizeStrategy.Test
 {

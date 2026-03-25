@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
-    // TODO: Run StrategyEngine on a backgroud thread to unblock UI during debugging
-    public partial class StrategyEngine(IStrategyContext context) : IDisposable
+    public class StrategyEngine(IStrategyContext context) : IDisposable
     {
         private readonly TrackingSet<long> _processedRequests = new();
 
@@ -24,7 +20,7 @@ namespace AutoSizeStrategy
 
             if (context.Settings.CurrentAccount == null)
             {
-                context.Logger.LogError($"Target account not set, cannot continue");
+                context.Logger.LogError("Target account not set, cannot continue");
                 return;
             }
 
@@ -34,7 +30,7 @@ namespace AutoSizeStrategy
             )
             {
                 context.Logger.LogError(
-                    $"End of day drawdown accounts require Minimum Balance Override"
+                    "End of day drawdown accounts require Minimum Balance Override"
                 );
                 return;
             }
@@ -75,28 +71,25 @@ namespace AutoSizeStrategy
                         $"Order request {orderRequestParameters.RequestId} cancelled: stop loss required"
                     );
                     orderRequestParameters.Quantity = 0;
-                    return;
                 }
                 else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
                 {
                     context.Logger.LogInfo(
                         $"Order request {orderRequestParameters.RequestId} has no stop loss - passing through unchanged"
                     );
-                    return;
                 }
+
+                return;
             }
 
-            string accountId = orderRequestParameters.Account.Id;
             DrawdownMode drawdownMode = context.Settings.DrawdownMode;
-
             var account = orderRequestParameters.Account;
 
-            string calculationReason = "";
             double riskCapital = RiskCalculator.CalculateRiskCapital(
                 account,
                 context.Settings.RiskPercent,
                 drawdownMode,
-                out calculationReason,
+                out var calculationReason,
                 minAccountBalanceOverride: context.Settings.MinAccountBalanceOverride
             );
             if (riskCapital <= 0)
@@ -106,11 +99,10 @@ namespace AutoSizeStrategy
                 return;
             }
 
-            string calculationReason1 = "";
             var drawdown = RiskCalculator.GetAvailableDrawdown(
                 account,
                 context.Settings.DrawdownMode,
-                out calculationReason1,
+                out _,
                 context.Settings.MinAccountBalanceOverride
             );
             context.Logger.LogInfo(

@@ -15,15 +15,15 @@ namespace AutoSizeStrategy
         public MissingStopLossAction MissingStopLossAction { get; set; } =
             MissingStopLossAction.Reject;
 
-        public double MinAccountBalanceOverride { get; set; } = 0.0;
+        public double MinAccountBalanceOverride { get; set; }
         public int MinimumStopLossTicks { get; set; } = 20;
         public double CommissionMicro { get; set; } = 0.25;
         public double CommissionMini { get; set; } = 2.5;
         public double AverageSlippageTicks { get; set; } = 1.5;
         public double ClutchModeBudget { get; set; } = 1350.0;
         public double[] ClutchModeRisk { get; set; } = [0.25, 0.25, 1.00];
-        public int MaxContractsMicro { get; set; } = 0;
-        public int MaxContractsMini { get; set; } = 0;
+        public int MaxContractsMicro { get; set; }
+        public int MaxContractsMini { get; set; }
         public DrawdownMode DrawdownMode { get; set; } = DrawdownMode.Static;
         private string _accountId = Core.Accounts.FindTargetAccount()?.Id;
         private readonly List<SettingItem> _additionalSettings = [];
@@ -86,7 +86,7 @@ namespace AutoSizeStrategy
                               Suitable for personal/cash accounts with no drawdown rules.
                               """,
             };
-            drawdownModeSetting.PropertyChanged += (s, e) =>
+            drawdownModeSetting.PropertyChanged += (_, _) =>
             {
                 if (drawdownModeSetting.Value is SelectItem si)
                     this.DrawdownMode = (DrawdownMode)si.Value;
@@ -113,7 +113,7 @@ namespace AutoSizeStrategy
                 Increment = 0.1,
                 DecimalPlaces = 1,
             };
-            riskPercentSetting.PropertyChanged += (s, e) =>
+            riskPercentSetting.PropertyChanged += (_, _) =>
                 this.RiskPercent = (double)riskPercentSetting.Value;
 
             var variants = new List<SelectItem>
@@ -135,7 +135,7 @@ namespace AutoSizeStrategy
                               the auto-size risk math.
                               """,
             };
-            missingStopLossActionSetting.PropertyChanged += (s, e) =>
+            missingStopLossActionSetting.PropertyChanged += (_, _) =>
             {
                 if (missingStopLossActionSetting.Value is SelectItem si)
                     this.MissingStopLossAction = (MissingStopLossAction)si.Value;
@@ -156,7 +156,7 @@ namespace AutoSizeStrategy
                               the broker's threshold.
                               """,
             };
-            minBalanceSetting.PropertyChanged += (s, e) =>
+            minBalanceSetting.PropertyChanged += (_, _) =>
                 this.MinAccountBalanceOverride = (double)minBalanceSetting.Value;
 
             var maxContractsMicroSetting = new SettingItemInteger(
@@ -172,7 +172,7 @@ namespace AutoSizeStrategy
                               Set to 0 to disable.
                               """,
             };
-            maxContractsMicroSetting.PropertyChanged += (s, e) =>
+            maxContractsMicroSetting.PropertyChanged += (_, _) =>
                 this.MaxContractsMicro = (int)maxContractsMicroSetting.Value;
 
             var maxContractsMiniSetting = new SettingItemInteger(
@@ -188,7 +188,7 @@ namespace AutoSizeStrategy
                               Set to 0 to disable.
                               """,
             };
-            maxContractsMiniSetting.PropertyChanged += (s, e) =>
+            maxContractsMiniSetting.PropertyChanged += (_, _) =>
                 this.MaxContractsMini = (int)maxContractsMiniSetting.Value;
 
             _additionalSettings.Add(
@@ -217,7 +217,7 @@ namespace AutoSizeStrategy
                 Minimum = 1,
                 Increment = 1,
             };
-            stopLossSetting.PropertyChanged += (s, e) =>
+            stopLossSetting.PropertyChanged += (_, _) =>
                 this.MinimumStopLossTicks = (int)stopLossSetting.Value;
 
             var slippageSetting = new SettingItemDouble(
@@ -229,7 +229,7 @@ namespace AutoSizeStrategy
                 Increment = 0.1,
                 DecimalPlaces = 1,
             };
-            slippageSetting.PropertyChanged += (s, e) =>
+            slippageSetting.PropertyChanged += (_, _) =>
                 this.AverageSlippageTicks = (double)slippageSetting.Value;
 
             var commMicroSetting = new SettingItemDouble(
@@ -241,7 +241,7 @@ namespace AutoSizeStrategy
                 Increment = 0.01,
                 DecimalPlaces = 2,
             };
-            commMicroSetting.PropertyChanged += (s, e) =>
+            commMicroSetting.PropertyChanged += (_, _) =>
                 this.CommissionMicro = (double)commMicroSetting.Value;
 
             var commMiniSetting = new SettingItemDouble(
@@ -253,7 +253,7 @@ namespace AutoSizeStrategy
                 Increment = 0.01,
                 DecimalPlaces = 2,
             };
-            commMiniSetting.PropertyChanged += (s, e) =>
+            commMiniSetting.PropertyChanged += (_, _) =>
                 this.CommissionMini = (double)commMiniSetting.Value;
 
             var clutchModeBudgetSetting = new SettingItemDouble(
@@ -271,7 +271,7 @@ namespace AutoSizeStrategy
                               bring the account out of a deep drawdown.
                               """,
             };
-            clutchModeBudgetSetting.PropertyChanged += (s, e) =>
+            clutchModeBudgetSetting.PropertyChanged += (_, _) =>
                 this.ClutchModeBudget = (double)clutchModeBudgetSetting.Value;
 
             var clutchModeRiskSequenceSetting = new SettingItemString(
@@ -287,7 +287,7 @@ namespace AutoSizeStrategy
                               of the clutch budget, and the final trade risks the rest.
                               """,
             };
-            clutchModeRiskSequenceSetting.PropertyChanged += (s, e) =>
+            clutchModeRiskSequenceSetting.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName != nameof(SettingItem.Value))
                     return;

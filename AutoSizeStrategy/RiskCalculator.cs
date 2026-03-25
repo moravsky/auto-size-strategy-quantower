@@ -1,5 +1,4 @@
 using System;
-using System.Timers;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
@@ -46,15 +45,14 @@ namespace AutoSizeStrategy
             // This is a configuration error if false (Impossible Instrument).
             if (tickValue <= 0)
             {
-                // TODO: Change to ArgumentOutOfRangeException
-                throw new ArgumentException("Tick value must be positive", nameof(tickValue));
+                throw new ArgumentOutOfRangeException(nameof(tickValue), "Tick value must be positive");
             }
 
             // Stop distance must be positive to avoid Division by Zero.
             // If stop is 0, logic is broken (Entry == Stop).
             if (stopDistanceTicks <= 0)
             {
-                throw new ArgumentException("Stop distance must be > 0", nameof(stopDistanceTicks));
+                throw new ArgumentOutOfRangeException(nameof(stopDistanceTicks), "Stop distance must be > 0");
             }
 
             // Calculate position size
@@ -80,12 +78,12 @@ namespace AutoSizeStrategy
 
             if (tickSize <= 0)
             {
-                throw new ArgumentException("Tick size must be positive");
+                throw new ArgumentOutOfRangeException(nameof(tickSize), "Tick size must be positive");
             }
 
             if (tickValue <= 0)
             {
-                throw new ArgumentException("Tick value must be positive");
+                throw new ArgumentOutOfRangeException(nameof(tickValue), "Tick value must be positive");
             }
 
             // Calculate stop distance in ticks
@@ -115,7 +113,7 @@ namespace AutoSizeStrategy
 
             if (tickSize <= 0)
             {
-                throw new ArgumentException("Tick size must be positive");
+                throw new ArgumentOutOfRangeException(nameof(tickSize), "Tick size must be positive");
             }
 
             if (slTpHolder.PriceMeasurement == PriceMeasurement.Offset)
@@ -146,7 +144,7 @@ namespace AutoSizeStrategy
             MathUtil.ValidateFinite(minAccountBalanceOverride, nameof(minAccountBalanceOverride));
             ArgumentNullException.ThrowIfNull(account);
 
-            double availableDrawdown = 0;
+            double availableDrawdown;
             reason = "";
 
             if (minAccountBalanceOverride > 0)
@@ -220,9 +218,9 @@ namespace AutoSizeStrategy
             MathUtil.ValidateFinite(riskPercent, nameof(riskPercent));
 
             if (riskPercent <= 0 || riskPercent > 100)
-                throw new ArgumentException(
-                    "Risk percentage must be > 0 and <= 100.",
-                    nameof(riskPercent)
+                throw new ArgumentOutOfRangeException(
+                    nameof(riskPercent),
+                    "Risk percentage must be > 0 and <= 100."
                 );
 
             double availableDrawdown = GetAvailableDrawdown(

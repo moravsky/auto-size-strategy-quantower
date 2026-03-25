@@ -2,16 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
     public static partial class TradingExtensions
     {
-        private const int DefaultRetryIntervalMs = 200;
-        private const int DefaultMaxWaitMs = 2000;
-
         [GeneratedRegex(@"TPPRO\d+")]
         public static partial Regex IntradayAccountPattern();
 
@@ -20,7 +16,7 @@ namespace AutoSizeStrategy
 
         // Micro contracts: MNQ, MES, MGC, MYM, M2K, etc.
         // All start with "M" followed by uppercase letter.
-        [GeneratedRegex(@"^M[A-Z]")]
+        [GeneratedRegex("^M[A-Z]")]
         private static partial Regex MicroContractPattern();
 
         public static bool IsMicro(this ISymbol symbol)
@@ -96,10 +92,12 @@ namespace AutoSizeStrategy
         // We need this, because we cannot create SDK Account type.
         public static T FindTargetAccount<T>(this IEnumerable<T> accounts)
         {
-            if (accounts == null || !accounts.Any())
+            var accountsList = accounts?.ToList();
+            if (accountsList is not { Count: > 0 })
                 return default;
 
-            return accounts.MinBy(item =>
+
+            return accountsList.MinBy(item =>
             {
                 // DUCK TYPING (The "C++ Template" Style)
                 // We assume 'item' has a public property named 'Id'.

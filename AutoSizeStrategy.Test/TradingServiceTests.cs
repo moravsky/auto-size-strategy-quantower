@@ -1,10 +1,7 @@
-using System;
-using System.Threading.Tasks;
 using Moq;
 using TradingPlatform.BusinessLayer;
-using Xunit;
 
-namespace AutoSizeStrategy.Tests
+namespace AutoSizeStrategy.Test
 {
     public class TradingServiceTests : IDisposable
     {
@@ -213,7 +210,7 @@ namespace AutoSizeStrategy.Tests
 
             _loggerMock
                 .Setup(l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))))
-                .Callback(() => tcs.SetResult());
+                .Callback(tcs.SetResult);
 
             _service.Cancel(orderMock.Object, useLeadingJitter: true);
 
@@ -236,7 +233,7 @@ namespace AutoSizeStrategy.Tests
             var tcs = new TaskCompletionSource();
             _loggerMock
                 .Setup(l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))))
-                .Callback(() => tcs.SetResult());
+                .Callback(tcs.SetResult);
 
             // Simulate the platform event
             _service.Cancel(orderMock.Object, useLeadingJitter: true);
@@ -265,7 +262,7 @@ namespace AutoSizeStrategy.Tests
             // Start Place
             _service.Place(requestMock.Object, useLeadingJitter: true);
 
-            await Task.Delay(100); // Wait for the background task to start
+            await Task.Delay(100, CancellationToken.None); // Wait for the background task to start
 
             requestMock.Verify(r => r.Send(), Times.Never);
             _loggerMock.Verify(

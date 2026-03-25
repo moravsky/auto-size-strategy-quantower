@@ -1,6 +1,4 @@
 using System;
-using System.Linq;
-using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
@@ -160,7 +158,7 @@ namespace AutoSizeStrategy
 
                 double currentRiskPct =
                     trades < riskLevels.Length ? riskLevels[trades] : riskLevels[^1];
-                if (currentRiskPct == 1)
+                if (MathUtil.Equals(currentRiskPct, 1))
                     return trades + 1;
 
                 double riskBase = currentBalance - hardFloor;

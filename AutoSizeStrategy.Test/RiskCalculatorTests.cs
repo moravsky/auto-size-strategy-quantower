@@ -1,8 +1,5 @@
-using System;
-using AutoSizeStrategy;
 using Moq;
 using TradingPlatform.BusinessLayer;
-using Xunit;
 
 namespace AutoSizeStrategy.Test
 {
@@ -101,7 +98,7 @@ namespace AutoSizeStrategy.Test
             double tickVal
         )
         {
-            Assert.Throws<ArgumentException>(() =>
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
                 RiskCalculator.CalculatePositionSize(riskCapital, stop, tickVal)
             );
         }
@@ -117,7 +114,7 @@ namespace AutoSizeStrategy.Test
             double tickValue
         )
         {
-            Assert.Throws<ArgumentException>(() =>
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
                 RiskCalculator.CalculatePositionSize(
                     riskCapital,
                     entryPrice,
@@ -179,7 +176,7 @@ namespace AutoSizeStrategy.Test
         [Fact]
         public void GetStopDistanceTicks_AbsolutePriceMeasurement_ReturnsCorrect()
         {
-            var slTpHolder = SlTpHolder.CreateSL(5995, PriceMeasurement.Absolute);
+            var slTpHolder = SlTpHolder.CreateSL(5995/*,  PriceMeasurement.Absolute */);
             double stopDistanceTicks = RiskCalculator.GetStopDistanceTicks(slTpHolder, 0.25, 6000);
             Assert.Equal(20, stopDistanceTicks);
         }
@@ -207,8 +204,8 @@ namespace AutoSizeStrategy.Test
             double tickSize
         )
         {
-            var slTpHolder = SlTpHolder.CreateSL(stopPrice, PriceMeasurement.Absolute);
-            Assert.Throws<ArgumentException>(() =>
+            var slTpHolder = SlTpHolder.CreateSL(stopPrice/*, PriceMeasurement.Absolute*/);
+            Assert.ThrowsAny<ArgumentException>(() =>
                 RiskCalculator.GetStopDistanceTicks(slTpHolder, tickSize, entryPrice)
             );
         }
@@ -301,7 +298,7 @@ namespace AutoSizeStrategy.Test
                 balance,
                 new Dictionary<string, string>
                 {
-                    { "AutoLiquidateThresholdCurrentValue", liquidateThreshold.ToString() },
+                    { "AutoLiquidateThresholdCurrentValue", $"{liquidateThreshold}" },
                 }
             );
 
@@ -334,13 +331,12 @@ namespace AutoSizeStrategy.Test
                 }
             );
 
-            string calculationReason = "";
             Assert.Throws<ArgumentException>(() =>
                 RiskCalculator.CalculateRiskCapital(
                     account,
                     riskPercent: 10.0,
                     DrawdownMode.Intraday,
-                    out calculationReason
+                    out _
                 )
             );
         }
@@ -363,7 +359,7 @@ namespace AutoSizeStrategy.Test
                 account,
                 riskPercent: 10.0,
                 DrawdownMode.EndOfDay,
-                out string reason,
+                out _,
                 minAccountBalanceOverride: minBalanceOverride
             );
 
@@ -413,13 +409,12 @@ namespace AutoSizeStrategy.Test
         [Fact]
         public void CalculateRiskCapital_NullAccount_ThrowsArgumentNullException()
         {
-            string calculationReason = "";
             Assert.Throws<ArgumentNullException>(() =>
                 RiskCalculator.CalculateRiskCapital(
                     account: null,
                     riskPercent: 1.0,
                     DrawdownMode.Static,
-                    out calculationReason
+                    out _
                 )
             );
         }
@@ -433,13 +428,12 @@ namespace AutoSizeStrategy.Test
         public void CalculateRiskCapital_InvalidRiskPercent_ThrowsArgumentException(double percent)
         {
             var account = CreateAccount(150_000);
-            string calculationReason = "";
-            Assert.Throws<ArgumentException>(() =>
+            Assert.ThrowsAny<ArgumentException>(() =>
                 RiskCalculator.CalculateRiskCapital(
                     account,
                     riskPercent: percent,
                     DrawdownMode.Static,
-                    out calculationReason
+                    out _
                 )
             );
         }
@@ -448,13 +442,12 @@ namespace AutoSizeStrategy.Test
         public void CalculateRiskCapital_RiskPercent_Exceeds100_ThrowsArgumentException()
         {
             var account = CreateAccount(150_000);
-            string calculationReason = "";
-            Assert.Throws<ArgumentException>(() =>
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
                 RiskCalculator.CalculateRiskCapital(
                     account,
                     riskPercent: 150.0,
                     DrawdownMode.Static,
-                    out calculationReason
+                    out _
                 )
             );
         }
@@ -496,7 +489,7 @@ namespace AutoSizeStrategy.Test
                 balance,
                 new Dictionary<string, string>
                 {
-                    { "AutoLiquidateThresholdCurrentValue", threshold.ToString() },
+                    { "AutoLiquidateThresholdCurrentValue", $"{threshold}" },
                 }
             );
 

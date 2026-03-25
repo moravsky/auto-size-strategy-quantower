@@ -1,14 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
-using System.Threading;
-using AutoSizeStrategy;
-using Moq;
-using Moq.Language.Flow;
+﻿using Moq;
 using TradingPlatform.BusinessLayer;
-using Xunit;
 
-namespace AutoSizeStrategy.Tests
+namespace AutoSizeStrategy.Test
 {
     public class StrategyEngineTests
     {
@@ -19,7 +12,6 @@ namespace AutoSizeStrategy.Tests
         private readonly Mock<IAccount> _accountMock;
         private readonly Mock<ISymbol> _symbolMock;
         private readonly StrategyEngine _engine;
-        private readonly Metrics _metrics;
 
         public StrategyEngineTests()
         {
@@ -47,8 +39,8 @@ namespace AutoSizeStrategy.Tests
             _settingsMock.SetupGet(s => s.MaxContractsMini).Returns(0);
             _settingsMock.SetupGet(s => s.DrawdownMode).Returns(DrawdownMode.Static);
 
-            _metrics = new Metrics(_settingsMock.Object);
-            _contextMock.SetupGet(c => c.Metrics).Returns(_metrics);
+            var metrics = new Metrics(_settingsMock.Object);
+            _contextMock.SetupGet(c => c.Metrics).Returns(metrics);
 
             // Default Account (Sim)
             _accountMock.SetupGet(a => a.Id).Returns("SimDefault");
@@ -74,44 +66,28 @@ namespace AutoSizeStrategy.Tests
         {
             get
             {
-                var data = new TheoryData<string, double, Dictionary<string, string>, double>();
-
-                // INTRADAY SCENARIO (TPPRO)
-                // Uses 'AutoLiquidateThresholdCurrentValue' to calculate risk.
-                data.Add(
-                    "TPPRO123456", // accountId: Matches Intraday Regex
-                    150_000, // balance: Current Account Balance
-                    new Dictionary<string, string>
+                var data = new TheoryData<string, double, Dictionary<string, string>, double>
+                {
+                    // INTRADAY SCENARIO (TPPRO)
+                    // Uses 'AutoLiquidateThresholdCurrentValue' to calculate risk.
                     {
-                        // The trailing drawdown level (High Water Mark - Drawdown Limit)
-                        { "AutoLiquidateThresholdCurrentValue", "145500" },
+                        "TPPRO123456", 150_000, new Dictionary<string, string>
+                        {
+                            // The trailing drawdown level (High Water Mark - Drawdown Limit)
+                            { "AutoLiquidateThresholdCurrentValue", "145500" },
+                        },
+                        4
                     },
-                    4 // expectedQty: (150k - 145.5k) = $4,500 Risk Budget.
-                    // 10% = $450. Stop $100/contract. Result = 4.
-                );
-
-                // STATIC SCENARIO (Personal/Sim)
-                // No Thresholds provided. Uses raw Balance.
-                data.Add(
-                    "SimPersonal", // accountId: Matches NO Regex -> Static Mode
-                    150_000, // balance
-                    new Dictionary<string, string>(), // No Additional Info needed
-                    150 // expectedQty: Risk 10% of 150k = $15,000.
-                    // Stop $100/contract. Result = 150.
-                );
-
-                // EDGE CASE: TIGHT TRAILING STOP
-                // Demonstrates what happens when the trailing stop is very close to balance.
-                data.Add(
-                    "TPPRO149900",
-                    150_000,
-                    new Dictionary<string, string>
+                    // STATIC SCENARIO (Personal/Sim)
+                    // No Thresholds provided. Uses raw Balance.
+                    { "SimPersonal", 150_000, new Dictionary<string, string>(), 150 },
+                    // EDGE CASE: TIGHT TRAILING STOP
+                    // Demonstrates what happens when the trailing stop is very close to balance.
+                    { "TPPRO149900", 150_000, new Dictionary<string, string>
                     {
                         { "AutoLiquidateThresholdCurrentValue", "149900" },
-                    },
-                    0 // expectedQty: Room is only $100. Risk 10% = $10.
-                    // Stop is $100. $10 / $100 = 0.1 -> Rounds to 0.
-                );
+                    }, 0 }
+                };
 
                 return data;
             }
@@ -643,24 +619,12 @@ namespace AutoSizeStrategy.Tests
             };
         }
 
-        private Mock<IOrder> CreateMockOrder(string id, double qty)
-        {
-            var order = new Mock<IOrder>();
-            order.SetupGet(o => o.Account).Returns(_accountMock.Object);
-            order.SetupGet(o => o.Symbol).Returns(_symbolMock.Object);
-            order.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
-            order.SetupGet(o => o.TotalQuantity).Returns(qty);
-            order.SetupGet(o => o.Id).Returns(id);
-            order.SetupGet(o => o.OrderTypeId).Returns(OrderType.Limit);
-            return order;
-        }
-
         #endregion
     }
 
     public class SomeOtherRequestParameters : IRequestParameters
     {
-        public long RequestId { get; init; } = default;
-        public CancellationToken CancellationToken { get; set; } = default;
+        public long RequestId { get; init; } = 0;
+        public CancellationToken CancellationToken { get; set; } = CancellationToken.None;
     }
 }

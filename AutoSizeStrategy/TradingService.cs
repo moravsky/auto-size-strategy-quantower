@@ -40,8 +40,8 @@ namespace AutoSizeStrategy
     }
 
     public class TradingService(
-        IStrategyLogger _logger,
-        TradingServiceSettings _tradingServiceSettings = default
+        IStrategyLogger logger,
+        TradingServiceSettings tradingServiceSettings = null
     ) : ITradingService
     {
         public TradingService(IStrategyLogger logger)
@@ -57,7 +57,7 @@ namespace AutoSizeStrategy
             if (
                 !_pendingPlacements.TryTrack(
                     parameters.RequestId,
-                    DateTime.UtcNow.AddMilliseconds(_tradingServiceSettings.PlaceExpirationMs)
+                    DateTime.UtcNow.AddMilliseconds(tradingServiceSettings.PlaceExpirationMs)
                 )
             )
                 return false;
@@ -95,7 +95,7 @@ namespace AutoSizeStrategy
                 order.Status != OrderStatus.Opened
                 || !_pendingCancels.TryTrack(
                     order.Id,
-                    DateTime.UtcNow.AddMilliseconds(_tradingServiceSettings.CancelExpirationMs)
+                    DateTime.UtcNow.AddMilliseconds(tradingServiceSettings.CancelExpirationMs)
                 )
             )
                 return false;
@@ -134,7 +134,7 @@ namespace AutoSizeStrategy
 
                         bool confirmed = await _pendingCancels.WaitAsync(
                             originalOrder.Id,
-                            _tradingServiceSettings.CancelWaitMs
+                            tradingServiceSettings.CancelWaitMs
                         );
                         if (
                             newParams.Quantity > MathUtil.Epsilon
@@ -145,12 +145,12 @@ namespace AutoSizeStrategy
                         }
                         else
                         {
-                            _logger.LogError($"CancelReplace: SLA Timeout for {originalOrder.Id}");
+                            logger.LogError($"CancelReplace: SLA Timeout for {originalOrder.Id}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"CancelReplace background fail: {ex.Message}");
+                        logger.LogError($"CancelReplace background fail: {ex.Message}");
                     }
                 },
                 _cts.Token
@@ -167,12 +167,12 @@ namespace AutoSizeStrategy
             Func<bool> shouldContinue = null
         )
         {
-            int retryDelayMs = _tradingServiceSettings.InitialRetryDelayMs;
-            for (int i = 0; i <= _tradingServiceSettings.MaxRetries; i++)
+            int retryDelayMs = tradingServiceSettings.InitialRetryDelayMs;
+            for (int i = 0; i <= tradingServiceSettings.MaxRetries; i++)
             {
                 if (shouldContinue != null && !shouldContinue())
                 {
-                    _logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
+                    logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
                     return TradingOperationResult.CreateSuccess(0, id);
                 }
 
@@ -182,8 +182,8 @@ namespace AutoSizeStrategy
                     {
                         await Task.Delay(
                             _random.Next(
-                                _tradingServiceSettings.MinJitterMs,
-                                _tradingServiceSettings.MaxJitterMs
+                                tradingServiceSettings.MinJitterMs,
+                                tradingServiceSettings.MaxJitterMs
                             ),
                             _cts.Token
                         );
@@ -192,7 +192,7 @@ namespace AutoSizeStrategy
                     // Double-check after the jitter
                     if (shouldContinue != null && !shouldContinue())
                     {
-                        _logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
+                        logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
                         return TradingOperationResult.CreateSuccess(0, id);
                     }
 
@@ -202,17 +202,17 @@ namespace AutoSizeStrategy
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"{name} {id} exception: {ex.Message}");
+                    logger.LogError($"{name} {id} exception: {ex.Message}");
                 }
 
-                if (i < _tradingServiceSettings.MaxRetries)
+                if (i < tradingServiceSettings.MaxRetries)
                 {
                     await Task.Delay(retryDelayMs, _cts.Token);
                     retryDelayMs *= 2;
                 }
             }
-            _logger.LogError(
-                $"{name} {id} timed out after {_tradingServiceSettings.MaxRetries} retries"
+            logger.LogError(
+                $"{name} {id} timed out after {tradingServiceSettings.MaxRetries} retries"
             );
             return TradingOperationResult.CreateError(67, $"{name} {id} timed out");
         }

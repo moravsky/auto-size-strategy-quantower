@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using TradingPlatform.BusinessLayer;
 
@@ -32,7 +30,6 @@ namespace AutoSizeStrategy
         double TriggerPrice { get; }
         string OrderTypeId { get; init; }
         double TotalQuantity { get; }
-        string OriginalStatus { get; }
         OrderStatus Status { get; }
         SlTpHolder[] StopLossItems { get; }
         ISymbol Symbol { get; }
@@ -40,7 +37,7 @@ namespace AutoSizeStrategy
         Order Inner { get; } // For debugging only, use wrapper in code
         TradingOperationResult Cancel();
         static IOrder Find(string orderId) =>
-            Core.Instance.Orders.FirstOrDefault(o => o.Id == orderId) is Order inner
+            Core.Instance.Orders.FirstOrDefault(o => o.Id == orderId) is { } inner
                 ? new OrderWrapper(inner)
                 : null;
     }
@@ -53,7 +50,6 @@ namespace AutoSizeStrategy
         public double TriggerPrice => order.TriggerPrice;
         public string OrderTypeId { get; init; } = order.OrderTypeId;
         public double TotalQuantity => order.TotalQuantity;
-        public string OriginalStatus => order.OriginalStatus;
         public OrderStatus Status => order.Status;
         public SlTpHolder[] StopLossItems => order.StopLossItems ?? [];
         public ISymbol Symbol => new SymbolWrapper(order.Symbol);
@@ -68,14 +64,13 @@ namespace AutoSizeStrategy
         string Id { get; }
         double Balance { get; }
         Dictionary<string, string> AdditionalInfo { get; }
-        string DumpAdditionalInfo();
     }
 
     public class AccountWrapper(Account account) : IAccount
     {
         public Account Inner => account;
-        public string Id => account?.Id ?? default;
-        public double Balance => account?.Balance ?? default;
+        public string Id => account?.Id;
+        public double Balance => account?.Balance ?? 0;
 
         public Dictionary<string, string> AdditionalInfo
         {
@@ -95,17 +90,6 @@ namespace AutoSizeStrategy
                 }
                 return additionalInfo;
             }
-        }
-
-        public string DumpAdditionalInfo()
-        {
-            if (account?.AdditionalInfo == null)
-                return "No AdditionalInfo";
-
-            var sb = new StringBuilder();
-            foreach (var item in account.AdditionalInfo.Items)
-                sb.AppendLine($"{item?.Id}: {item?.Value}");
-            return sb.ToString();
         }
     }
 
@@ -223,36 +207,34 @@ namespace AutoSizeStrategy
         where T : OrderRequestParameters // Constraints ensure we only wrap order-related params
     {
         // Wrap the SDK Account/Symbol with our wrappers
-        private IAccount _accountWrapper = new AccountWrapper(inner.Account);
-        private ISymbol _symbolWrapper = new SymbolWrapper(inner.Symbol);
 
         public IAccount Account
         {
-            get => _accountWrapper;
+            get;
             init
             {
-                _accountWrapper = value;
+                field = value;
                 // The "Unwrap" Bridge: Sync back to the SDK object
                 if (value is AccountWrapper wrapper)
                 {
                     Inner.Account = wrapper.Inner;
                 }
             }
-        }
+        } = new AccountWrapper(inner.Account);
 
         public ISymbol Symbol
         {
-            get => _symbolWrapper;
+            get;
             init
             {
-                _symbolWrapper = value;
+                field = value;
                 // The "Unwrap" Bridge: Sync back to the SDK object
                 if (value is SymbolWrapper wrapper)
                 {
                     Inner.Symbol = wrapper.Inner;
                 }
             }
-        }
+        } = new SymbolWrapper(inner.Symbol);
 
         // SDK settable properties proxy to Inner. Read-only properties are cached.
         public double Quantity
@@ -327,15 +309,12 @@ namespace AutoSizeStrategy
             init => Inner.OrderTypeId = value;
         }
 
-        // TODO: Refactor so that proxy classes only return "our" types to the codebase.
-        // That way we minimize our ties to Quantower SDK to AutoSizeStrategy and
-        // ProxyDefinitions, which will make plugging other engines (Rithmic SDK) easier.
         public abstract TradingOperationResult Send();
 
         // TODO: Support multiple brackets
         private void SyncFirstBracket(List<SlTpHolder> brackets, double qty)
         {
-            if (brackets != null && brackets.Count > 0)
+            if (brackets is { Count: > 0 })
             {
                 brackets[0].Quantity = qty;
             }
