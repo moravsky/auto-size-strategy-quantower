@@ -22,8 +22,8 @@ namespace AutoSizeStrategy
         public double AverageSlippageTicks { get; set; } = 1.5;
         public double ClutchModeBudget { get; set; } = 1350.0;
         public double[] ClutchModeRisk { get; set; } = [0.25, 0.25, 1.00];
-        public int MaxContractsMicro { get; set; }
-        public int MaxContractsMini { get; set; }
+        public int MaxContractsMicro { get; set; } = 150;
+        public int MaxContractsMini { get; set; } = 15;
         public DrawdownMode DrawdownMode { get; set; } = DrawdownMode.Static;
         private string _accountId = Core.Accounts.FindTargetAccount()?.Id;
         private readonly List<SettingItem> _additionalSettings = [];
