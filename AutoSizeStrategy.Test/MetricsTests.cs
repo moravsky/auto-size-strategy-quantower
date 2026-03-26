@@ -1,4 +1,5 @@
 using Moq;
+using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy.Test
 {
@@ -50,6 +51,27 @@ namespace AutoSizeStrategy.Test
             _settingsMock.SetupGet(s => s.ClutchModeRisk).Returns([0.25, 0.25, 1]);
         }
 
+        private Metrics CreateMetrics(
+            ISymbol? symbol = null,
+            double? stopDistanceTicks = null,
+            List<IPosition>? positions = null,
+            List<IOrder>? orders = null)
+        {
+            var metrics = new Metrics(
+                _settingsMock.Object,
+                positions != null ? _ => positions : null,
+                orders != null ? _ => orders : null
+            );
+
+            if (symbol != null)
+                metrics.LastSymbol = symbol;
+
+            if (stopDistanceTicks.HasValue)
+                metrics.LastStopDistanceTicks = stopDistanceTicks.Value;
+
+            return metrics;
+        }
+
         [Theory]
         [InlineData(150000, 15)] // Full Start: 12 standard + 3 clutch = 15
         [InlineData(147500, 7)] // Mid-Drawdown ($2k buffer): Standard trades reduced
@@ -59,11 +81,7 @@ namespace AutoSizeStrategy.Test
         )
         {
             _accountMock.SetupGet(a => a.Balance).Returns(balance);
-            var metrics = new Metrics(_settingsMock.Object)
-            {
-                LastSymbol = _symbolMock.Object,
-                LastStopDistanceTicks = 64,
-            };
+            var metrics = CreateMetrics(symbol: _symbolMock.Object, stopDistanceTicks: 64);
 
             var result = metrics.GetAccountMetrics();
 
@@ -82,12 +100,7 @@ namespace AutoSizeStrategy.Test
         )
         {
             _accountMock.SetupGet(a => a.Balance).Returns(balance);
-
-            var metrics = new Metrics(_settingsMock.Object)
-            {
-                LastSymbol = _symbolMock.Object,
-                LastStopDistanceTicks = 64,
-            };
+            var metrics = CreateMetrics(symbol: _symbolMock.Object, stopDistanceTicks: 64);
 
             var result = metrics.GetAccountMetrics();
 
@@ -107,11 +120,7 @@ namespace AutoSizeStrategy.Test
             _accountMock.SetupGet(a => a.Balance).Returns(balance);
             _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(145500);
-            var metrics = new Metrics(_settingsMock.Object)
-            {
-                LastSymbol = _symbolMock.Object,
-                LastStopDistanceTicks = 64,
-            };
+            var metrics = CreateMetrics(symbol: _symbolMock.Object, stopDistanceTicks: 64);
 
             var result = metrics.GetAccountMetrics();
 
@@ -130,11 +139,7 @@ namespace AutoSizeStrategy.Test
             _accountMock.SetupGet(a => a.Balance).Returns(balance);
             _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(150000);
-            var metrics = new Metrics(_settingsMock.Object)
-            {
-                LastSymbol = _symbolMock.Object,
-                LastStopDistanceTicks = 64,
-            };
+            var metrics = CreateMetrics(symbol: _symbolMock.Object, stopDistanceTicks: 64);
 
             var result = metrics.GetAccountMetrics();
 
@@ -155,12 +160,7 @@ namespace AutoSizeStrategy.Test
             _accountMock.SetupGet(a => a.Balance).Returns(balance);
             _accountMock.SetupGet(a => a.Id).Returns("TPT123456");
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(145500);
-
-            var metrics = new Metrics(_settingsMock.Object)
-            {
-                LastSymbol = _symbolMock.Object,
-                LastStopDistanceTicks = 64,
-            };
+            var metrics = CreateMetrics(symbol: _symbolMock.Object, stopDistanceTicks: 64);
 
             var result = metrics.GetAccountMetrics();
 
@@ -175,13 +175,15 @@ namespace AutoSizeStrategy.Test
         public void GetAccountMetrics_ZeroOrNegativeDrawdown_ReturnsZeros(double balance)
         {
             _accountMock.SetupGet(a => a.Balance).Returns(balance);
+            var metrics = CreateMetrics();
 
-            var metrics = new Metrics(_settingsMock.Object);
             var result = metrics.GetAccountMetrics();
 
             Assert.Equal(0, result.RiskCapital);
             Assert.Equal(0, result.TradesToBust);
             Assert.Equal(0, result.TradesToClutchMode);
+            Assert.Equal(0, result.AbsoluteValueAtRisk);
+            Assert.Equal(0, result.RelativeValueAtRiskPercent);
         }
 
         [Theory]
@@ -192,16 +194,125 @@ namespace AutoSizeStrategy.Test
         {
             _accountMock.SetupGet(a => a.Balance).Returns(150000);
             _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(tickCost);
-            var metrics = new Metrics(_settingsMock.Object)
-            {
-                LastSymbol = _symbolMock.Object,
-                LastStopDistanceTicks = 64,
-            };
+            var metrics = CreateMetrics(symbol: _symbolMock.Object, stopDistanceTicks: 64);
+
             var result = metrics.GetAccountMetrics();
 
             Assert.Equal(4500, result.RiskCapital);
             Assert.Null(result.TradesToBust);
             Assert.Null(result.TradesToClutchMode);
         }
+
+        #region Value At Risk Tests
+
+        public record TestStopOrder(string OrderTypeId, double TriggerPrice, double Price, double Quantity);
+
+        public static TheoryData<double, double, TestStopOrder[], double, double> ValueAtRiskScenarios => new()
+        {
+            // [PositionQty, SlippageTicks, Stops, ExpectedAbsVaR, ExpectedRelVaR]
+
+            // 1. No Positions -> 0 VaR
+            { 0, 0.0, [], 0.0, 0.0 },
+
+            // 2. Unprotected Position -> Max Exposure (150K balance - 145.5K threshold = 4500)
+            { 5, 0.0, [], 4500.0, 100.0 },
+
+            // 3. Stop Order: Calculates distance + slippage
+            // Dist = 20 ticks * $5 * 2 qty = $200. Slippage = 2 ticks * $5 * 2 qty = $20. Total = $220.
+            { 2, 2.0, [new(OrderType.Stop, 4995.0, 0.0, 2)], 220.0, 220.0 / 45.0 },
+
+            // 4. StopLimit Order: Uses Limit Price for distance
+            // Limit is 40 ticks away. 40 * $5 * 2 = $400.
+            { 2, 0.0, [new(OrderType.StopLimit, 4995.0, 4990.0, 2)], 400.0, 400.0 / 45.0 },
+
+            // 5. Multiple Stop Orders: Calculates blended distance
+            // Stop 1 covers 1 qty 20 ticks away ($100). Stop 2 covers 2 qty 40 ticks away ($400). Total = $500.
+            { 3, 0.0, [new(OrderType.Stop, 4995.0, 0.0, 1), new(OrderType.Stop, 4990.0, 0.0, 2)], 500.0, 500.0 / 45.0 },
+
+            // 6. Partial Protection: Returns Max Exposure instantly
+            // Pos qty = 3, Stop qty = 1. 2 contracts unprotected -> Max Exposure ($4500).
+            { 3, 0.0, [new(OrderType.Stop, 4995.0, 0.0, 1)], 4500.0, 100.0 }
+        };
+
+        [Theory]
+        [MemberData(nameof(ValueAtRiskScenarios))]
+        public void ValueAtRisk_StandardScenarios_CalculatesCorrectly(
+            double positionQty,
+            double slippageTicks,
+            TestStopOrder[] stops,
+            double expectedAbsVaR,
+            double expectedRelVaR)
+        {
+            // Base setup for VaR tests: Max Exposure = 150000 - 145500 = 4500
+            _accountMock.SetupGet(a => a.Balance).Returns(150000);
+            _symbolMock.SetupGet(s => s.TickSize).Returns(0.25);
+            _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5.0);
+            _settingsMock.SetupGet(s => s.AverageSlippageTicks).Returns(slippageTicks);
+
+            var positions = new List<IPosition>();
+            if (positionQty > 0)
+            {
+                var posMock = new Mock<IPosition>();
+                posMock.SetupGet(p => p.Symbol).Returns(_symbolMock.Object);
+                posMock.SetupGet(p => p.Side).Returns(Side.Buy);
+                posMock.SetupGet(p => p.Quantity).Returns(positionQty);
+                posMock.SetupGet(p => p.OpenPrice).Returns(5000.0);
+                posMock.SetupGet(p => p.Account).Returns(_accountMock.Object);
+                positions.Add(posMock.Object);
+            }
+
+            var orders = new List<IOrder>();
+            foreach (var stop in stops)
+            {
+                var orderMock = new Mock<IOrder>();
+                orderMock.SetupGet(o => o.Symbol).Returns(_symbolMock.Object);
+                orderMock.SetupGet(o => o.Side).Returns(Side.Sell);
+                orderMock.SetupGet(o => o.OrderTypeId).Returns(stop.OrderTypeId);
+                orderMock.SetupGet(o => o.TriggerPrice).Returns(stop.TriggerPrice);
+                orderMock.SetupGet(o => o.Price).Returns(stop.Price);
+                orderMock.SetupGet(o => o.TotalQuantity).Returns(stop.Quantity);
+                orderMock.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
+                orders.Add(orderMock.Object);
+            }
+
+            var metrics = CreateMetrics(
+                positions: positions,
+                orders: orders
+            );
+
+            var result = metrics.GetAccountMetrics();
+
+            Assert.Equal(expectedAbsVaR, result.AbsoluteValueAtRisk ?? 0.0, precision: 2);
+            Assert.Equal(expectedRelVaR, result.RelativeValueAtRiskPercent ?? 0.0, precision: 2);
+        }
+
+        [Fact]
+        public void ValueAtRisk_UnprotectedPosition_NoThreshold_FallsBackToBalance()
+        {
+            // Static account: no AutoLiquidateThresholdCurrentValue
+            _accountMock.SetupGet(a => a.Balance).Returns(150000);
+            _accountMock.SetupGet(a => a.Id).Returns("SimDefault");
+            _accountMock
+                .SetupGet(a => a.AdditionalInfo)
+                .Returns(new Dictionary<string, string>());
+            _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
+            _settingsMock.SetupGet(s => s.DrawdownMode).Returns(DrawdownMode.Static);
+
+            var posMock = new Mock<IPosition>();
+            posMock.SetupGet(p => p.Symbol).Returns(_symbolMock.Object);
+            posMock.SetupGet(p => p.Side).Returns(Side.Buy);
+            posMock.SetupGet(p => p.Quantity).Returns(1);
+            posMock.SetupGet(p => p.OpenPrice).Returns(5000.0);
+            posMock.SetupGet(p => p.Account).Returns(_accountMock.Object);
+
+            var metrics = CreateMetrics(positions: [posMock.Object]);
+
+            var result = metrics.GetAccountMetrics();
+
+            Assert.Equal(150000, result.AbsoluteValueAtRisk);
+            Assert.Equal(100.0, result.RelativeValueAtRiskPercent);
+        }
+
+        #endregion
     }
 }

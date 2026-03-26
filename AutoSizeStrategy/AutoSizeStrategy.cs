@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics.Metrics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
@@ -25,6 +26,8 @@ namespace AutoSizeStrategy
         private double _mRiskCapital = double.NaN;
         private double _mTradesToClutch = double.NaN;
         private double _mTradesToBust = double.NaN;
+        private double _mAbsoluteValueAtRisk = double.NaN;
+        private double _mRelativeValueAtRisk = double.NaN;
         private readonly object _metricsLock = new();
         private const int HeartbeatPeriodMs = 1000;
 
@@ -52,7 +55,13 @@ namespace AutoSizeStrategy
             }
 
             _shutdownCts = new CancellationTokenSource();
-            this._metrics = new Metrics(this);
+            this._metrics = new Metrics(this,
+                    account => Core.Instance.Positions
+                        .Where(p => p.Account.Id == account.Id)
+                        .Select(p => new PositionWrapper(p)),
+                    account => Core.Instance.Orders
+                        .Where(o => o.Account.Id == account.Id && o.Status == OrderStatus.Opened)
+                        .Select(o => new OrderWrapper(o)));
             var context = new StrategyContext(this, this._metrics);
             this._strategyEngine = new StrategyEngine(context);
 
@@ -95,6 +104,18 @@ namespace AutoSizeStrategy
                 "trades-to-bust",
                 () => Volatile.Read(ref _mTradesToBust),
                 description: "Trades to Bust"
+            );
+            meter.CreateObservableGauge(
+                "absolute-value-at-risk",
+                () => Volatile.Read(ref _mAbsoluteValueAtRisk),
+                unit: "$",
+                description: "Absolute Value at Risk ($)"
+            );
+            meter.CreateObservableGauge(
+                "relative-value-at-risk",
+                () => Volatile.Read(ref _mRelativeValueAtRisk),
+                unit: "%",
+                description: "Relative Value at Risk (%)"
             );
         }
 
@@ -142,6 +163,8 @@ namespace AutoSizeStrategy
                     Volatile.Write(ref _mRiskCapital, m.RiskCapital ?? double.NaN);
                     Volatile.Write(ref _mTradesToClutch, m.TradesToClutchMode ?? double.NaN);
                     Volatile.Write(ref _mTradesToBust, m.TradesToBust ?? double.NaN);
+                    Volatile.Write(ref _mAbsoluteValueAtRisk, m.AbsoluteValueAtRisk ?? double.NaN);
+                    Volatile.Write(ref _mRelativeValueAtRisk, m.RelativeValueAtRiskPercent ?? double.NaN);
                 }
                 catch (Exception ex)
                 {

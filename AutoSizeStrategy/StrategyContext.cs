@@ -58,10 +58,12 @@ namespace AutoSizeStrategy
             : this(
                 Logger: autoSizeStrategy,
                 Settings: autoSizeStrategy,
-                new TradingService(autoSizeStrategy),
+                TradingService: new TradingService(autoSizeStrategy),
                 Metrics: metrics,
-                () => Core.Instance.Positions.Select(p => new PositionWrapper(p))
-            ) { }
+                PositionProvider: () => Core.Instance.Positions.Select(p => new PositionWrapper(p))
+            )
+        {
+        }
 
         public double GetNetPositionQuantity(IAccount account, ISymbol symbol)
         {

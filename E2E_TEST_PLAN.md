@@ -98,6 +98,16 @@ Setup: Risk Percent 10%, balance $150K static account (uncapped calculatedSize =
 | <input type="checkbox"> | G1 | Cap below calculated size | Set Max Contracts (Micro) to 50. Place MNQ order qty=1 with 20-tick SL | Order capped at 50. Log shows "Capping calculatedSize from 150 to 50". |
 | <input type="checkbox"> | G2 | Micro and mini caps are independent | Set Max Contracts (Micro)=50, Max Contracts (Mini)=5. Place NQ order, then MNQ order | NQ capped at 5, MNQ capped at 50. Each uses its own setting. |
 
+### Test Suite H: Value at Risk Reporting
+
+| Done | # | Test Case | Steps | Expected Result |
+|------|---|-----------|-------|-----------------|
+| <input type="checkbox"> | V1 | Protected Position | Enter 1 contract limit order with exactly 20 tick SL. Let it fill. | Absolute Value at Risk reads exact dollar risk based on OpenPrice distance to SL plus slippage. Relative Value at Risk calculates against distance-to-liquidation. |
+| <input type="checkbox"> | V2 | StopLimit evaluation | Enter 1 contract position. Place a StopLimit SL where Trigger and Limit are 5 ticks apart. | Absolute Value at Risk uses the Limit Price distance, not the Trigger price distance. |
+| <input type="checkbox"> | V3 | Modified SL changes Risk | With position open, drag the SL on chart further away. | Within 1 second (Heartbeat), Absolute Value at Risk and Relative update to new higher values. |
+| <input type="checkbox"> | V4 | Unprotected Position Spike | Enter a limit order with NO stop loss (Ignore Mode). Let it fill. | Absolute Value at Risk spikes to distance-to-liquidation (DTF). Relative Value at Risk shows 100%. |
+| <input type="checkbox"> | V5 | Static Account Unprotected | On a Sim/Static account with no AutoLiquidateThreshold, enter Unprotected position. | Absolute Value at Risk shows full Account Balance. |
+
 
 ### Test Suite M: Miscellaneous
 

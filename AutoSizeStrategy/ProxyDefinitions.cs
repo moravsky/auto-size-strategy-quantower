@@ -11,6 +11,7 @@ namespace AutoSizeStrategy
         ISymbol Symbol { get; }
         Side Side { get; }
         double Quantity { get; }
+        double OpenPrice { get; }
     }
 
     public class PositionWrapper(Position position) : IPosition
@@ -20,6 +21,7 @@ namespace AutoSizeStrategy
 
         public Side Side => position.Side;
         public double Quantity => position.Quantity;
+        public double OpenPrice => position.OpenPrice;
     }
 
     public interface IOrder

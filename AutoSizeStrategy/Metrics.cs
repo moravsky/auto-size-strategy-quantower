@@ -1,20 +1,34 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
     public record AccountMetrics(
         double? RiskCapital,
         int? TradesToClutchMode,
-        int? TradesToBust
+        int? TradesToBust,
+        double? AbsoluteValueAtRisk,
+        double? RelativeValueAtRiskPercent
     );
 
-    public class Metrics(IStrategySettings settings)
+    public class Metrics(
+        IStrategySettings settings,
+        Func<IAccount, IEnumerable<IPosition>> positionProvider = null,
+        Func<IAccount, IEnumerable<IOrder>> workingOrderProvider = null)
     {
         private const int MaxIterations = 10_000;
         private const double MinRiskPercentage = .05;
 
         private readonly IStrategySettings _settings =
             settings ?? throw new ArgumentNullException(nameof(settings));
+
+        private readonly Func<IAccount, IEnumerable<IPosition>> _positionProvider =
+            positionProvider ?? (_ => []);
+
+        private readonly Func<IAccount, IEnumerable<IOrder>> _workingOrderProvider =
+            workingOrderProvider ?? (_ => []);
 
         public ISymbol LastSymbol { get; set; } = new DefaultSymbol();
         public double LastStopDistanceTicks { get; set; } = settings.MinimumStopLossTicks;
@@ -23,20 +37,21 @@ namespace AutoSizeStrategy
         {
             var account = _settings.CurrentAccount;
             if (account == null)
-                return new AccountMetrics(null, null, null);
+                return new AccountMetrics(null, null, null, null, null);
 
             double availableDrawdown = GetAvailableDrawdown(account);
             if (availableDrawdown <= 0)
-                return new AccountMetrics(0, 0, 0);
-
-            double liquidationThreshold = account.Balance - availableDrawdown;
-            double clutchTriggerBalance = liquidationThreshold + _settings.ClutchModeBudget;
-            if (clutchTriggerBalance <= 0)
-                return new AccountMetrics(availableDrawdown, null, null);
+                return new AccountMetrics(0, 0, 0, 0, 0);
 
             var (stopTicks, tickVal, lossPerContract) = GetUnitEconomics();
             if (!double.IsFinite(tickVal) || tickVal <= 0)
-                return new AccountMetrics(availableDrawdown, null, null);
+                return new AccountMetrics(availableDrawdown, null, null, null, null);
+
+            var (absVaR, relVaR) = CalculateValueAtRisk(account);
+            double liquidationThreshold = account.Balance - availableDrawdown;
+            double clutchTriggerBalance = liquidationThreshold + _settings.ClutchModeBudget;
+            if (clutchTriggerBalance <= 0)
+                return new AccountMetrics(availableDrawdown, null, null, absVaR, relVaR);
 
             int tradesToClutch = GetNormalTrades(
                 startBalance: account.Balance,
@@ -57,19 +72,91 @@ namespace AutoSizeStrategy
                 lossPerContract
             );
 
+
             return new AccountMetrics(
                 RiskCapital: availableDrawdown,
                 TradesToClutchMode: tradesToClutch,
-                TradesToBust: tradesToClutch + clutchTrades
+                TradesToBust: tradesToClutch + clutchTrades,
+                AbsoluteValueAtRisk: absVaR,
+                RelativeValueAtRiskPercent: relVaR
             );
+        }
+
+        // Distance to broker liquidation if known, otherwise full balance
+        private static double GetMaxExposure(IAccount account)
+        {
+            return account.TryGetInfoDouble("AutoLiquidateThresholdCurrentValue", out double threshold)
+                ? account.Balance - threshold
+                : account.Balance;
+        }
+
+        private (double absolute, double relativePct) CalculateValueAtRisk(
+            IAccount account)
+        {
+            if (account == null)
+                return (double.NaN, double.NaN);
+
+            double maxExposure = GetMaxExposure(account);
+            double totalAbsolute = 0;
+            var positions = _positionProvider(account).ToList();
+            var workingOrders = _workingOrderProvider(account).ToList();
+
+            foreach (var pos in positions)
+            {
+                double tickSize = pos.Symbol.TickSize;
+                double tickValue = pos.Symbol.GetTickCost(pos.OpenPrice);
+
+                if (!double.IsFinite(tickValue) || tickValue <= 0 || tickSize <= 0)
+                {
+                    return (maxExposure, 100.0);
+                }
+
+                // Find all protective stops for this position
+                var stopOrders = workingOrders.Where(o =>
+                        o.Symbol.Id == pos.Symbol.Id
+                        && o.Side != pos.Side
+                        && (o.OrderTypeId == OrderType.Stop
+                            || o.OrderTypeId == OrderType.StopLimit
+                            || o.OrderTypeId == OrderType.TrailingStop))
+                    // Order so the closest protective stops (least risk) are applied first
+                    .OrderByDescending(o => pos.Side == Side.Buy ? o.GetLikelyFillPrice() : -o.GetLikelyFillPrice())
+                    .ToList();
+
+                double unprotectedQty = pos.Quantity;
+
+                foreach (var stop in stopOrders)
+                {
+                    if (unprotectedQty <= MathUtil.Epsilon)
+                        break;
+
+                    double expectedExitPrice = stop.GetLikelyFillPrice();
+                    double distanceTicks = Math.Abs(pos.OpenPrice - expectedExitPrice) / tickSize;
+
+                    // Cap the calculated quantity to the remaining unprotected amount
+                    double protectedQty = Math.Min(stop.TotalQuantity, unprotectedQty);
+                    double slippageCost = _settings.AverageSlippageTicks * tickValue * protectedQty;
+
+                    totalAbsolute += (distanceTicks * tickValue * protectedQty) + slippageCost;
+                    unprotectedQty -= protectedQty;
+                }
+
+                if (unprotectedQty > MathUtil.Epsilon)
+                {
+                    // If any portion of the position is unprotected, it bounds to max broker exposure
+                    return (maxExposure, 100.0);
+                }
+            }
+
+            double absolute = Math.Min(totalAbsolute, maxExposure);
+            double relativePct = maxExposure > 0 ? (absolute / maxExposure) * 100.0 : 0;
+            return (absolute, relativePct);
         }
 
         private double GetAvailableDrawdown(IAccount account)
         {
-            var mode = account.InferDrawdownMode();
             return RiskCalculator.GetAvailableDrawdown(
                 account,
-                mode,
+                _settings.DrawdownMode,
                 out _,
                 minAccountBalanceOverride: _settings.MinAccountBalanceOverride
             );
@@ -176,6 +263,7 @@ namespace AutoSizeStrategy
                     return trades;
                 currentBalance -= contracts * lossPerContract;
             }
+
             return MaxIterations;
         }
     }
