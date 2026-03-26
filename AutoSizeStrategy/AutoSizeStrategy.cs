@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
@@ -18,6 +18,13 @@ namespace AutoSizeStrategy
         private StrategyEngine _strategyEngine;
         private Metrics _metrics;
         private CancellationTokenSource _shutdownCts;
+
+        // Backing fields for metric gauges.
+        // Volatile.Read/Write used for thread safety — 'volatile double' is not valid C#.
+        private double _mRiskPercent;
+        private double _mRiskCapital = double.NaN;
+        private double _mTradesToClutch = double.NaN;
+        private double _mTradesToBust = double.NaN;
 
         public AutoSizeStrategy()
         {
@@ -50,6 +57,8 @@ namespace AutoSizeStrategy
             Core.NewRequest += this.CoreNewRequest;
             Core.NewPerformedRequest += this.CoreNewPerformedRequest;
             Core.OrderRemoved += this.CoreOrderRemoved;
+
+            UpdateMetrics();
         }
 
         protected override void OnCreated()
@@ -58,53 +67,53 @@ namespace AutoSizeStrategy
             InitializeSettings();
         }
 
-        [Obsolete("Use OnInitializeMetrics()")]
-        protected override List<StrategyMetric> OnGetMetrics()
+        protected override void OnInitializeMetrics(Meter meter)
         {
-            var result = base.OnGetMetrics();
+            base.OnInitializeMetrics(meter);
 
+            meter.CreateObservableGauge(
+                "target-risk-pct",
+                () => Volatile.Read(ref _mRiskPercent),
+                unit: "%",
+                description: "Target Risk (%)"
+            );
+            meter.CreateObservableGauge(
+                "risk-capital",
+                () => Volatile.Read(ref _mRiskCapital),
+                unit: "$",
+                description: "Risk Capital ($)"
+            );
+            meter.CreateObservableGauge(
+                "trades-to-clutch",
+                () => Volatile.Read(ref _mTradesToClutch),
+                description: "Trades to Clutch"
+            );
+            meter.CreateObservableGauge(
+                "trades-to-bust",
+                () => Volatile.Read(ref _mTradesToBust),
+                description: "Trades to Bust"
+            );
+        }
+
+        private void UpdateMetrics()
+        {
             try
             {
+                Volatile.Write(ref _mRiskPercent, RiskPercent);
+
                 if (_metrics == null)
-                    return result;
+                    return;
 
                 var m = _metrics.GetAccountMetrics();
 
-                result.Add(
-                    new StrategyMetric
-                    {
-                        Name = "Risk Percent",
-                        FormattedValue = $"{(RiskPercent / 100.0):P2}",
-                    }
-                );
-                result.Add(
-                    new StrategyMetric
-                    {
-                        Name = "Drawdown Remaining",
-                        FormattedValue =
-                            m.DrawdownRemaining != null ? $"${m.DrawdownRemaining:F2}" : "N/A",
-                    }
-                );
-                var tradesToClutch =
-                    m.TradesToClutchMode != null ? m.TradesToClutchMode.ToString() : "N/A";
-                result.Add(
-                    new StrategyMetric
-                    {
-                        Name = "Trades to Clutch",
-                        FormattedValue = tradesToClutch,
-                    }
-                );
-                var tradesToBust = m.TradesToBust != null ? m.TradesToBust.ToString() : "N/A";
-                result.Add(
-                    new StrategyMetric { Name = "Trades to Bust", FormattedValue = tradesToBust }
-                );
+                Volatile.Write(ref _mRiskCapital, m.RiskCapital ?? double.NaN);
+                Volatile.Write(ref _mTradesToClutch, m.TradesToClutchMode ?? double.NaN);
+                Volatile.Write(ref _mTradesToBust, m.TradesToBust ?? double.NaN);
             }
             catch (Exception ex)
             {
-                LogError($"OnGetMetrics failed: {ex.Message}");
+                LogError($"UpdateMetrics failed: {ex.Message}");
             }
-
-            return result;
         }
 
         private void CoreNewRequest(object sender, RequestEventArgs e)
@@ -112,6 +121,7 @@ namespace AutoSizeStrategy
             try
             {
                 _strategyEngine.ProcessRequest(e.RequestParameters);
+                UpdateMetrics();
             }
             catch (Exception ex)
             {
@@ -138,7 +148,7 @@ namespace AutoSizeStrategy
                 var cts = _shutdownCts;
                 if (_disposed || cts == null)
                     return;
-                
+
                 await Task.Run(() => _strategyEngine.ReportCancelledOrder(order.Id), cts.Token);
             }
             catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)

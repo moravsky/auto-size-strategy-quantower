@@ -85,14 +85,14 @@ namespace AutoSizeStrategy
             DrawdownMode drawdownMode = context.Settings.DrawdownMode;
             var account = orderRequestParameters.Account;
 
-            double riskCapital = RiskCalculator.CalculateRiskCapital(
+            double positionRisk = RiskCalculator.CalculatePositionRisk(
                 account,
                 context.Settings.RiskPercent,
                 drawdownMode,
                 out var calculationReason,
                 minAccountBalanceOverride: context.Settings.MinAccountBalanceOverride
             );
-            if (riskCapital <= 0)
+            if (positionRisk <= 0)
             {
                 context.Logger.LogInfo($"Risk=0 for {account.Id}. Reason: {calculationReason}");
                 orderRequestParameters.Quantity = 0;
@@ -106,7 +106,7 @@ namespace AutoSizeStrategy
                 context.Settings.MinAccountBalanceOverride
             );
             context.Logger.LogInfo(
-                $"Account balance:{account.Balance} drawdown: {drawdown} risk capital:{riskCapital}"
+                $"Account balance:{account.Balance} drawdown: {drawdown} position risk:{positionRisk}"
             );
 
             var symbol = orderRequestParameters.Symbol;
@@ -133,7 +133,7 @@ namespace AutoSizeStrategy
             context.Metrics.LastStopDistanceTicks = stopDistanceTicks;
 
             int calculatedSize = RiskCalculator.CalculatePositionSize(
-                riskCapital,
+                positionRisk,
                 stopDistanceTicks,
                 tickValue
             );

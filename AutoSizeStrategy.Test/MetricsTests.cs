@@ -67,7 +67,7 @@ namespace AutoSizeStrategy.Test
 
             var result = metrics.GetAccountMetrics();
 
-            Assert.Equal(balance - 145500, result.DrawdownRemaining);
+            Assert.Equal(balance - 145500, result.RiskCapital);
             Assert.Equal(expectedTrades, result.TradesToBust);
         }
 
@@ -91,7 +91,7 @@ namespace AutoSizeStrategy.Test
 
             var result = metrics.GetAccountMetrics();
 
-            Assert.Equal(expectedDrawdown, result.DrawdownRemaining);
+            Assert.Equal(expectedDrawdown, result.RiskCapital);
             Assert.Equal(0, result.TradesToClutchMode);
             Assert.Equal(expectedTradesToBust, result.TradesToBust);
         }
@@ -115,7 +115,7 @@ namespace AutoSizeStrategy.Test
 
             var result = metrics.GetAccountMetrics();
 
-            Assert.Equal(balance - 145500, result.DrawdownRemaining);
+            Assert.Equal(balance - 145500, result.RiskCapital);
             Assert.Equal(expectedTrades, result.TradesToBust);
         }
 
@@ -138,7 +138,7 @@ namespace AutoSizeStrategy.Test
 
             var result = metrics.GetAccountMetrics();
 
-            Assert.Equal(balance - 150000, result.DrawdownRemaining);
+            Assert.Equal(balance - 150000, result.RiskCapital);
             Assert.Equal(expectedTrades, result.TradesToBust);
         }
 
@@ -164,7 +164,7 @@ namespace AutoSizeStrategy.Test
 
             var result = metrics.GetAccountMetrics();
 
-            Assert.Equal(expectedDrawdown, result.DrawdownRemaining);
+            Assert.Equal(expectedDrawdown, result.RiskCapital);
             Assert.Equal(0, result.TradesToClutchMode);
             Assert.Equal(expectedTradesToBust, result.TradesToBust);
         }
@@ -179,7 +179,7 @@ namespace AutoSizeStrategy.Test
             var metrics = new Metrics(_settingsMock.Object);
             var result = metrics.GetAccountMetrics();
 
-            Assert.Equal(0, result.DrawdownRemaining);
+            Assert.Equal(0, result.RiskCapital);
             Assert.Equal(0, result.TradesToBust);
             Assert.Equal(0, result.TradesToClutchMode);
         }
@@ -199,7 +199,7 @@ namespace AutoSizeStrategy.Test
             };
             var result = metrics.GetAccountMetrics();
 
-            Assert.Equal(4500, result.DrawdownRemaining);
+            Assert.Equal(4500, result.RiskCapital);
             Assert.Null(result.TradesToBust);
             Assert.Null(result.TradesToClutchMode);
         }

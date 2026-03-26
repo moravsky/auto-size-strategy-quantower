@@ -25,19 +25,19 @@ namespace AutoSizeStrategy
     public static class RiskCalculator
     {
         // TODO: factor commisions and slippage into calculation
-        /// Calculates the maximum position size based on the risk capital, stop distance, and tick value.
+        /// Calculates the maximum position size based on the position risk, stop distance, and tick value.
         public static int CalculatePositionSize(
-            double riskCapital,
+            double positionRisk,
             double stopDistanceTicks,
             double tickValue
         )
         {
-            MathUtil.ValidateFinite(riskCapital, nameof(riskCapital));
+            MathUtil.ValidateFinite(positionRisk, nameof(positionRisk));
             MathUtil.ValidateFinite(stopDistanceTicks, nameof(stopDistanceTicks));
             MathUtil.ValidateFinite(tickValue, nameof(tickValue));
 
             // Could happen in a valid scenario
-            if (riskCapital <= 0)
+            if (positionRisk <= 0)
             {
                 return 0;
             }
@@ -56,21 +56,21 @@ namespace AutoSizeStrategy
             }
 
             // Calculate position size
-            double rawResult = riskCapital / (stopDistanceTicks * tickValue);
+            double rawResult = positionRisk / (stopDistanceTicks * tickValue);
             int positionSize = (int)Math.Floor(rawResult + MathUtil.Epsilon);
 
             return positionSize;
         }
 
         public static int CalculatePositionSize(
-            double riskCapital,
+            double positionRisk,
             double entryPrice,
             double stopPrice,
             double tickSize,
             double tickValue
         )
         {
-            MathUtil.ValidateFinite(riskCapital, nameof(riskCapital));
+            MathUtil.ValidateFinite(positionRisk, nameof(positionRisk));
             MathUtil.ValidateFinite(entryPrice, nameof(entryPrice));
             MathUtil.ValidateFinite(stopPrice, nameof(stopPrice));
             MathUtil.ValidateFinite(tickSize, nameof(tickSize));
@@ -98,7 +98,7 @@ namespace AutoSizeStrategy
             }
 
             // Calculate position size
-            return CalculatePositionSize(riskCapital, stopDistanceTicks, tickValue);
+            return CalculatePositionSize(positionRisk, stopDistanceTicks, tickValue);
         }
 
         public static double GetStopDistanceTicks(
@@ -207,7 +207,7 @@ namespace AutoSizeStrategy
 
         /// Determines the amount of capital that can be risked based on the account balance,
         /// previous EOD balance (for EOD accounts only) and the selected drawdown mode, then applies the risk percentage.
-        public static double CalculateRiskCapital(
+        public static double CalculatePositionRisk(
             IAccount account,
             double riskPercent,
             DrawdownMode mode,
@@ -233,9 +233,9 @@ namespace AutoSizeStrategy
             if (availableDrawdown <= 0)
                 return 0;
 
-            double riskCapital = availableDrawdown * (riskPercent / 100.0);
-            reason = $"OK Drawdown: {availableDrawdown:F2}, Risk: {riskCapital:F2}";
-            return riskCapital;
+            double positionRisk = availableDrawdown * (riskPercent / 100.0);
+            reason = $"OK Drawdown: {availableDrawdown:F2}, Risk: {positionRisk:F2}";
+            return positionRisk;
         }
     }
 }

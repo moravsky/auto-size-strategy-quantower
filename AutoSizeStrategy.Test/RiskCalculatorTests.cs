@@ -7,20 +7,20 @@ namespace AutoSizeStrategy.Test
     {
         #region CalculatePositionSize
         [Theory]
-        // riskCapital, stopDistanceTicks, tickValue, expectedSize
+        // positionRisk, stopDistanceTicks, tickValue, expectedSize
         [InlineData(500, 20, 5, 5)]
         [InlineData(500, 30, 5, 3)]
         [InlineData(100, 40, 0.5, 5)]
         [InlineData(300, 25, 1, 12)]
         public void CalculatePositionSize3_Scenarios_CalculateCorrectly(
-            double riskCapital,
+            double positionRisk,
             double stopDistanceTicks,
             double tickValue,
             double expectedSize
         )
         {
             int size = RiskCalculator.CalculatePositionSize(
-                riskCapital,
+                positionRisk,
                 stopDistanceTicks,
                 tickValue
             );
@@ -70,7 +70,7 @@ namespace AutoSizeStrategy.Test
         // Result: Not allowed in UI, should return 0 -> cancel request
         [InlineData(100, 4100, 4100, 0.25, 5, 0)]
         public void CalculatePositionSize5_Scenarios_ReturnCorrectSize(
-            double riskCapital,
+            double positionRisk,
             double entryPrice,
             double exitPrice,
             double tickSize,
@@ -79,7 +79,7 @@ namespace AutoSizeStrategy.Test
         )
         {
             int size = RiskCalculator.CalculatePositionSize(
-                riskCapital,
+                positionRisk,
                 entryPrice,
                 exitPrice,
                 tickSize,
@@ -93,13 +93,13 @@ namespace AutoSizeStrategy.Test
         [InlineData(500, 0, 5)] // zero stop
         [InlineData(500, 20, 0)] // zero tick value
         public void CalculatePositionSize3_InvalidInputs_ThrowsArgumentException(
-            double riskCapital,
+            double positionRisk,
             double stop,
             double tickVal
         )
         {
             Assert.Throws<ArgumentOutOfRangeException>(() =>
-                RiskCalculator.CalculatePositionSize(riskCapital, stop, tickVal)
+                RiskCalculator.CalculatePositionSize(positionRisk, stop, tickVal)
             );
         }
 
@@ -107,7 +107,7 @@ namespace AutoSizeStrategy.Test
         [InlineData(1000, 6000, 6005, 0, 50)] // zero tick size
         [InlineData(1000, 6000, 6005, -0.25, 50)] // negative tick size
         public void CalculatePositionSize5_InvalidInputs_ThrowsArgumentException(
-            double riskCapital,
+            double positionRisk,
             double entryPrice,
             double stopPrice,
             double tickSize,
@@ -116,7 +116,7 @@ namespace AutoSizeStrategy.Test
         {
             Assert.Throws<ArgumentOutOfRangeException>(() =>
                 RiskCalculator.CalculatePositionSize(
-                    riskCapital,
+                    positionRisk,
                     entryPrice,
                     stopPrice,
                     tickSize,
@@ -131,14 +131,14 @@ namespace AutoSizeStrategy.Test
         [InlineData(500, double.NaN, 5)]
         [InlineData(500, 20, double.NegativeInfinity)]
         public void CalculatePositionSize3_NonFiniteInputs_ThrowsException(
-            double riskCapital,
+            double positionRisk,
             double stopTicks,
             double tickVal
         )
         {
             // These should trigger MathUtil.ValidateFinite
             Assert.ThrowsAny<ArgumentException>(() =>
-                RiskCalculator.CalculatePositionSize(riskCapital, stopTicks, tickVal)
+                RiskCalculator.CalculatePositionSize(positionRisk, stopTicks, tickVal)
             );
         }
 
@@ -240,7 +240,7 @@ namespace AutoSizeStrategy.Test
 
         #endregion
 
-        #region CalculateRiskCapital
+        #region CalculatePositionRisk
 
         [Theory]
         // STANDARD ACCOUNT
@@ -252,7 +252,7 @@ namespace AutoSizeStrategy.Test
         // DREAM COME TRUE
         // Balance 1,000,000. Risk 0.5% = 5,000.
         [InlineData(1_000_000, 0.5, 5_000.0)]
-        public void CalculateRiskCapital_Static_Scenarios(
+        public void CalculatePositionRisk_Static_Scenarios(
             double balance,
             double riskPercent,
             double expectedRisk
@@ -260,14 +260,14 @@ namespace AutoSizeStrategy.Test
         {
             var account = CreateAccount(balance);
 
-            double riskCapital = RiskCalculator.CalculateRiskCapital(
+            double positionRisk = RiskCalculator.CalculatePositionRisk(
                 account,
                 riskPercent: riskPercent,
                 DrawdownMode.Static,
                 out string reason
             );
 
-            Assert.Equal(expectedRisk, riskCapital, precision: 4);
+            Assert.Equal(expectedRisk, positionRisk, precision: 4);
             Assert.Contains("OK", reason);
         }
 
@@ -288,7 +288,7 @@ namespace AutoSizeStrategy.Test
         // Balance 145,510. Trailing Stop at 145,500.
         // Room: 10. Risk 10% = 1.
         [InlineData(145_510, 145_500, 1.0)]
-        public void CalculateRiskCapital_Intraday_Scenarios(
+        public void CalculatePositionRisk_Intraday_Scenarios(
             double balance,
             double liquidateThreshold,
             double expectedRisk
@@ -302,14 +302,14 @@ namespace AutoSizeStrategy.Test
                 }
             );
 
-            double riskCapital = RiskCalculator.CalculateRiskCapital(
+            double positionRisk = RiskCalculator.CalculatePositionRisk(
                 account,
                 riskPercent: 10.0,
                 DrawdownMode.Intraday,
                 out string reason
             );
 
-            Assert.Equal(expectedRisk, riskCapital, precision: 4);
+            Assert.Equal(expectedRisk, positionRisk, precision: 4);
             Assert.Contains("OK", reason);
         }
 
@@ -319,7 +319,7 @@ namespace AutoSizeStrategy.Test
         [InlineData("Infinity")]
         [InlineData("-Infinity")]
         [InlineData("NaN")]
-        public void CalculateRiskCapital_InfiniteLiquidateThreshold_Throws(
+        public void CalculatePositionRisk_InfiniteLiquidateThreshold_Throws(
             string liquidateThreshold
         )
         {
@@ -332,7 +332,7 @@ namespace AutoSizeStrategy.Test
             );
 
             Assert.Throws<ArgumentException>(() =>
-                RiskCalculator.CalculateRiskCapital(
+                RiskCalculator.CalculatePositionRisk(
                     account,
                     riskPercent: 10.0,
                     DrawdownMode.Intraday,
@@ -347,7 +347,7 @@ namespace AutoSizeStrategy.Test
         [InlineData(152_000, 147_500, 450.0)]
         [InlineData(146_000, 145_500, 50.0)]
         [InlineData(145_510, 145_500, 1.0)]
-        public void CalculateRiskCapital_EndOfDay_WithOverride_CalculatesCorrectly(
+        public void CalculatePositionRisk_EndOfDay_WithOverride_CalculatesCorrectly(
             double balance,
             double minBalanceOverride,
             double expectedRisk
@@ -355,7 +355,7 @@ namespace AutoSizeStrategy.Test
         {
             var account = CreateAccount(balance);
 
-            double riskCapital = RiskCalculator.CalculateRiskCapital(
+            double positionRisk = RiskCalculator.CalculatePositionRisk(
                 account,
                 riskPercent: 10.0,
                 DrawdownMode.EndOfDay,
@@ -363,15 +363,15 @@ namespace AutoSizeStrategy.Test
                 minAccountBalanceOverride: minBalanceOverride
             );
 
-            Assert.Equal(expectedRisk, riskCapital, precision: 2);
+            Assert.Equal(expectedRisk, positionRisk, precision: 2);
         }
 
         [Fact]
-        public void CalculateRiskCapital_EOD_NoOverride_ReturnsZero()
+        public void CalculatePositionRisk_EOD_NoOverride_ReturnsZero()
         {
             var account = CreateAccount(150_000);
 
-            double riskCapital = RiskCalculator.CalculateRiskCapital(
+            double positionRisk = RiskCalculator.CalculatePositionRisk(
                 account,
                 riskPercent: 10.0,
                 DrawdownMode.EndOfDay,
@@ -379,12 +379,12 @@ namespace AutoSizeStrategy.Test
                 minAccountBalanceOverride: 0.0
             );
 
-            Assert.Equal(0, riskCapital);
+            Assert.Equal(0, positionRisk);
             Assert.Contains("requires", reason);
         }
 
         [Fact]
-        public void CalculateRiskCapital_FuzzTest_DoesNotCrash()
+        public void CalculatePositionRisk_FuzzTest_DoesNotCrash()
         {
             var rnd = new Random(123);
             for (int i = 0; i < 1000; i++)
@@ -394,7 +394,7 @@ namespace AutoSizeStrategy.Test
 
                 var account = CreateAccount(balance);
 
-                var risk = RiskCalculator.CalculateRiskCapital(
+                var risk = RiskCalculator.CalculatePositionRisk(
                     account,
                     10,
                     DrawdownMode.EndOfDay,
@@ -407,10 +407,10 @@ namespace AutoSizeStrategy.Test
         }
 
         [Fact]
-        public void CalculateRiskCapital_NullAccount_ThrowsArgumentNullException()
+        public void CalculatePositionRisk_NullAccount_ThrowsArgumentNullException()
         {
             Assert.Throws<ArgumentNullException>(() =>
-                RiskCalculator.CalculateRiskCapital(
+                RiskCalculator.CalculatePositionRisk(
                     account: null,
                     riskPercent: 1.0,
                     DrawdownMode.Static,
@@ -425,11 +425,11 @@ namespace AutoSizeStrategy.Test
         [InlineData(double.NaN)]
         [InlineData(0.0)]
         [InlineData(-5.0)]
-        public void CalculateRiskCapital_InvalidRiskPercent_ThrowsArgumentException(double percent)
+        public void CalculatePositionRisk_InvalidRiskPercent_ThrowsArgumentException(double percent)
         {
             var account = CreateAccount(150_000);
             Assert.ThrowsAny<ArgumentException>(() =>
-                RiskCalculator.CalculateRiskCapital(
+                RiskCalculator.CalculatePositionRisk(
                     account,
                     riskPercent: percent,
                     DrawdownMode.Static,
@@ -439,11 +439,11 @@ namespace AutoSizeStrategy.Test
         }
 
         [Fact]
-        public void CalculateRiskCapital_RiskPercent_Exceeds100_ThrowsArgumentException()
+        public void CalculatePositionRisk_RiskPercent_Exceeds100_ThrowsArgumentException()
         {
             var account = CreateAccount(150_000);
             Assert.Throws<ArgumentOutOfRangeException>(() =>
-                RiskCalculator.CalculateRiskCapital(
+                RiskCalculator.CalculatePositionRisk(
                     account,
                     riskPercent: 150.0,
                     DrawdownMode.Static,
@@ -600,7 +600,7 @@ namespace AutoSizeStrategy.Test
         }
 
         [Fact]
-        public void CalculateRiskCapital_StillWorksAfterRefactor()
+        public void CalculatePositionRisk_StillWorksAfterRefactor()
         {
             // Verify the existing API produces identical results after extraction
             var account = CreateAccount(
@@ -611,7 +611,7 @@ namespace AutoSizeStrategy.Test
                 }
             );
 
-            double riskCapital = RiskCalculator.CalculateRiskCapital(
+            double positionRisk = RiskCalculator.CalculatePositionRisk(
                 account,
                 10.0,
                 DrawdownMode.Intraday,
@@ -619,7 +619,7 @@ namespace AutoSizeStrategy.Test
             );
 
             // Available = 4500. Risk 10% = 450.
-            Assert.Equal(450, riskCapital, precision: 4);
+            Assert.Equal(450, positionRisk, precision: 4);
             Assert.Contains("OK", reason);
         }
 

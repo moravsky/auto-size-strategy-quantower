@@ -3,7 +3,7 @@ using System;
 namespace AutoSizeStrategy
 {
     public record AccountMetrics(
-        double? DrawdownRemaining,
+        double? RiskCapital,
         int? TradesToClutchMode,
         int? TradesToBust
     );
@@ -58,7 +58,7 @@ namespace AutoSizeStrategy
             );
 
             return new AccountMetrics(
-                DrawdownRemaining: availableDrawdown,
+                RiskCapital: availableDrawdown,
                 TradesToClutchMode: tradesToClutch,
                 TradesToBust: tradesToClutch + clutchTrades
             );
