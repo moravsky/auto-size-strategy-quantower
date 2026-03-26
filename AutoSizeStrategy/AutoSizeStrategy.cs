@@ -25,6 +25,8 @@ namespace AutoSizeStrategy
         private double _mRiskCapital = double.NaN;
         private double _mTradesToClutch = double.NaN;
         private double _mTradesToBust = double.NaN;
+        private readonly object _metricsLock = new();
+        private const int HeartbeatPeriodMs = 1000;
 
         public AutoSizeStrategy()
         {
@@ -59,6 +61,7 @@ namespace AutoSizeStrategy
             Core.OrderRemoved += this.CoreOrderRemoved;
 
             UpdateMetrics();
+            StartHeartbeat(_shutdownCts.Token);
         }
 
         protected override void OnCreated()
@@ -95,24 +98,55 @@ namespace AutoSizeStrategy
             );
         }
 
+        private void StartHeartbeat(CancellationToken token)
+        {
+            Task.Run(async () =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await Task.Delay(HeartbeatPeriodMs, token);
+
+                        if (!token.IsCancellationRequested)
+                        {
+                            UpdateMetrics();
+                        }
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        // Normal shutdown
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogError($"Metrics timer error: {ex.Message}");
+                    }
+                }
+            }, token);
+        }
+
         private void UpdateMetrics()
         {
-            try
+            lock (_metricsLock)
             {
-                Volatile.Write(ref _mRiskPercent, RiskPercent);
+                try
+                {
+                    Volatile.Write(ref _mRiskPercent, RiskPercent);
 
-                if (_metrics == null)
-                    return;
+                    if (_metrics == null)
+                        return;
 
-                var m = _metrics.GetAccountMetrics();
+                    var m = _metrics.GetAccountMetrics();
 
-                Volatile.Write(ref _mRiskCapital, m.RiskCapital ?? double.NaN);
-                Volatile.Write(ref _mTradesToClutch, m.TradesToClutchMode ?? double.NaN);
-                Volatile.Write(ref _mTradesToBust, m.TradesToBust ?? double.NaN);
-            }
-            catch (Exception ex)
-            {
-                LogError($"UpdateMetrics failed: {ex.Message}");
+                    Volatile.Write(ref _mRiskCapital, m.RiskCapital ?? double.NaN);
+                    Volatile.Write(ref _mTradesToClutch, m.TradesToClutchMode ?? double.NaN);
+                    Volatile.Write(ref _mTradesToBust, m.TradesToBust ?? double.NaN);
+                }
+                catch (Exception ex)
+                {
+                    LogError($"UpdateMetrics failed: {ex.Message}");
+                }
             }
         }
 
