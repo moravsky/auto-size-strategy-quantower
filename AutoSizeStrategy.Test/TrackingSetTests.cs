@@ -152,5 +152,28 @@ namespace AutoSizeStrategy.Test
             Assert.False(await shortWait); // Hit its 50ms SLA
             Assert.True(await longWait); // Eventually got the 'true' signal
         }
+
+        [Fact]
+        public async Task GetTask_ReturnsCompletedTask_WhenKeyNotTracked()
+        {
+            using var set = new TrackingSet<string>();
+            var task = set.GetTask("ghost");
+            Assert.True(task.IsCompleted);
+            Assert.True(await task);
+        }
+
+        [Fact]
+        public async Task GetTask_ReturnsPendingTask_ThenCompletes_WhenRemoved()
+        {
+            using var set = new TrackingSet<string>();
+            set.TryTrack("key1");
+
+            var task = set.GetTask("key1");
+            Assert.False(task.IsCompleted);
+
+            set.TryRemove("key1");
+
+            Assert.True(await task);
+        }
     }
 }

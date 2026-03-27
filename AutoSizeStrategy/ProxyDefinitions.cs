@@ -33,9 +33,9 @@ namespace AutoSizeStrategy
         string OrderTypeId { get; init; }
         double TotalQuantity { get; }
         OrderStatus Status { get; }
-        SlTpHolder[] StopLossItems { get; }
         ISymbol Symbol { get; }
         Side Side { get; }
+        // ReSharper disable once UnusedMember.Global
         Order Inner { get; } // For debugging only, use wrapper in code
         TradingOperationResult Cancel();
         static IOrder Find(string orderId) =>
@@ -53,7 +53,6 @@ namespace AutoSizeStrategy
         public string OrderTypeId { get; init; } = order.OrderTypeId;
         public double TotalQuantity => order.TotalQuantity;
         public OrderStatus Status => order.Status;
-        public SlTpHolder[] StopLossItems => order.StopLossItems ?? [];
         public ISymbol Symbol => new SymbolWrapper(order.Symbol);
         public Side Side => order.Side;
         public Order Inner => order; // For debugging only, use wrapper in code

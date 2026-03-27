@@ -374,23 +374,23 @@ namespace AutoSizeStrategy.Test
 
         #endregion
 
-        #region GetAvailableDrawdown
+        #region GetAvailableRiskCapital
 
         [Theory]
         [InlineData(150_000, 150_000)]
         [InlineData(10_000, 10_000)]
         [InlineData(500, 500)]
-        public void Static_ReturnsFullBalance(double balance, double expectedDrawdown)
+        public void Static_ReturnsFullBalance(double balance, double expectedRiskCapital)
         {
             var account = CreateAccount(balance);
 
-            double result = RiskCalculator.GetAvailableDrawdown(
+            double result = RiskCalculator.GetAvailableRiskCapital(
                 account,
                 DrawdownMode.Static,
                 out string reason
             );
 
-            Assert.Equal(expectedDrawdown, result);
+            Assert.Equal(expectedRiskCapital, result);
             Assert.Contains("OK", reason);
         }
 
@@ -402,7 +402,7 @@ namespace AutoSizeStrategy.Test
         public void Intraday_ReturnsBalanceMinusThreshold(
             double balance,
             double threshold,
-            double expectedDrawdown
+            double expectedRiskCapital
         )
         {
             var account = CreateAccount(
@@ -413,13 +413,13 @@ namespace AutoSizeStrategy.Test
                 }
             );
 
-            double result = RiskCalculator.GetAvailableDrawdown(
+            double result = RiskCalculator.GetAvailableRiskCapital(
                 account,
                 DrawdownMode.Intraday,
                 out _
             );
 
-            Assert.Equal(expectedDrawdown, result);
+            Assert.Equal(expectedRiskCapital, result);
         }
 
         [Fact]
@@ -427,7 +427,7 @@ namespace AutoSizeStrategy.Test
         {
             var account = CreateAccount(150_000, new Dictionary<string, string>());
 
-            double result = RiskCalculator.GetAvailableDrawdown(
+            double result = RiskCalculator.GetAvailableRiskCapital(
                 account,
                 DrawdownMode.Intraday,
                 out string reason
@@ -442,7 +442,7 @@ namespace AutoSizeStrategy.Test
         {
             var account = CreateAccount(150_000);
 
-            double result = RiskCalculator.GetAvailableDrawdown(
+            double result = RiskCalculator.GetAvailableRiskCapital(
                 account,
                 DrawdownMode.EndOfDay,
                 out string reason
@@ -458,19 +458,19 @@ namespace AutoSizeStrategy.Test
         public void EOD_WithOverride_ReturnsBalanceMinusOverride(
             double balance,
             double minOverride,
-            double expectedDrawdown
+            double expectedRiskCapital
         )
         {
             var account = CreateAccount(balance);
 
-            double result = RiskCalculator.GetAvailableDrawdown(
+            double result = RiskCalculator.GetAvailableRiskCapital(
                 account,
                 DrawdownMode.EndOfDay,
                 out _,
                 minAccountBalanceOverride: minOverride
             );
 
-            Assert.Equal(expectedDrawdown, result, precision: 2);
+            Assert.Equal(expectedRiskCapital, result, precision: 2);
         }
 
         [Fact]
@@ -479,7 +479,7 @@ namespace AutoSizeStrategy.Test
             // Even for Static mode, override should be used when > 0
             var account = CreateAccount(150_000);
 
-            double result = RiskCalculator.GetAvailableDrawdown(
+            double result = RiskCalculator.GetAvailableRiskCapital(
                 account,
                 DrawdownMode.Static,
                 out _,
@@ -501,7 +501,7 @@ namespace AutoSizeStrategy.Test
                 }
             );
 
-            double result = RiskCalculator.GetAvailableDrawdown(
+            double result = RiskCalculator.GetAvailableRiskCapital(
                 account,
                 DrawdownMode.Intraday,
                 out string reason
@@ -515,7 +515,7 @@ namespace AutoSizeStrategy.Test
         public void NullAccount_Throws()
         {
             Assert.Throws<ArgumentNullException>(() =>
-                RiskCalculator.GetAvailableDrawdown(null, DrawdownMode.Static, out _)
+                RiskCalculator.GetAvailableRiskCapital(null, DrawdownMode.Static, out _)
             );
         }
 

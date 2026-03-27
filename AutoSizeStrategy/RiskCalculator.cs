@@ -100,7 +100,7 @@ namespace AutoSizeStrategy
             }
         }
 
-        public static double GetAvailableDrawdown(
+        public static double GetAvailableRiskCapital(
             IAccount account,
             DrawdownMode mode,
             out string reason,
@@ -110,21 +110,21 @@ namespace AutoSizeStrategy
             MathUtil.ValidateFinite(minAccountBalanceOverride, nameof(minAccountBalanceOverride));
             ArgumentNullException.ThrowIfNull(account);
 
-            double availableDrawdown;
+            double availableRiskCapital;
             reason = "";
 
             if (minAccountBalanceOverride > 0)
             {
                 reason =
                     $"Using minAccountBalanceOverride={minAccountBalanceOverride} for drawdown calculation";
-                availableDrawdown = account.Balance - minAccountBalanceOverride;
+                availableRiskCapital = account.Balance - minAccountBalanceOverride;
             }
             else
             {
                 switch (mode)
                 {
                     case DrawdownMode.Static:
-                        availableDrawdown = account.Balance;
+                        availableRiskCapital = account.Balance;
                         break;
                     case DrawdownMode.Intraday:
                         if (
@@ -138,7 +138,7 @@ namespace AutoSizeStrategy
                             return 0;
                         }
 
-                        availableDrawdown = account.Balance - autoLiqCurrent;
+                        availableRiskCapital = account.Balance - autoLiqCurrent;
                         break;
                     case DrawdownMode.EndOfDay:
                         reason = "EOD mode requires 'Minimum Account Balance (Override)' to be set";
@@ -151,24 +151,24 @@ namespace AutoSizeStrategy
                 }
             }
 
-            if (availableDrawdown <= 0)
+            if (availableRiskCapital <= 0)
             {
-                reason = $"Available drawdown is zero or negative ({availableDrawdown})";
+                reason = $"Available risk capital is zero or negative ({availableRiskCapital})";
                 return 0;
             }
 
-            if (availableDrawdown > account.Balance)
+            if (availableRiskCapital > account.Balance)
             {
-                availableDrawdown = account.Balance;
-                reason = "Drawdown capped at Account Balance (Calculation exceeded balance)";
+                availableRiskCapital = account.Balance;
+                reason = "Risk capital capped at Account Balance (Calculation exceeded balance)";
             }
 
             if (string.IsNullOrEmpty(reason))
             {
-                reason = $"OK Drawdown: {availableDrawdown:F2}";
+                reason = $"OK Risk Capital: {availableRiskCapital:F2}";
             }
 
-            return availableDrawdown;
+            return availableRiskCapital;
         }
 
         public static double CalculatePositionRisk(
@@ -187,18 +187,18 @@ namespace AutoSizeStrategy
                     "Risk percentage must be > 0 and <= 100."
                 );
 
-            double availableDrawdown = GetAvailableDrawdown(
+            double availableRiskCapital = GetAvailableRiskCapital(
                 account,
                 mode,
                 out reason,
                 minAccountBalanceOverride
             );
 
-            if (availableDrawdown <= 0)
+            if (availableRiskCapital <= 0)
                 return 0;
 
-            double positionRisk = availableDrawdown * (riskPercent / 100.0);
-            reason = $"OK Drawdown: {availableDrawdown:F2}, Risk: {positionRisk:F2}";
+            double positionRisk = availableRiskCapital * (riskPercent / 100.0);
+            reason = $"OK Drawdown: {availableRiskCapital:F2}, Risk: {positionRisk:F2}";
             return positionRisk;
         }
     }

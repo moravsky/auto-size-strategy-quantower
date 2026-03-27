@@ -99,14 +99,14 @@ namespace AutoSizeStrategy
                 return;
             }
 
-            var drawdown = RiskCalculator.GetAvailableDrawdown(
+            var riskCapital = RiskCalculator.GetAvailableRiskCapital(
                 account,
                 context.Settings.DrawdownMode,
                 out _,
                 context.Settings.MinAccountBalanceOverride
             );
             context.Logger.LogInfo(
-                $"Account balance:{account.Balance} drawdown: {drawdown} position risk:{positionRisk}"
+                $"Account balance:{account.Balance} riskCapital: {riskCapital} position risk:{positionRisk}"
             );
 
             var symbol = orderRequestParameters.Symbol;

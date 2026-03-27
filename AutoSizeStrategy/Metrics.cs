@@ -31,20 +31,26 @@ namespace AutoSizeStrategy
             if (account == null)
                 return new AccountMetrics(null, null, null, null, null);
 
-            double availableDrawdown = GetAvailableDrawdown(account);
-            if (availableDrawdown <= 0)
+            double availableRiskCapital = RiskCalculator.GetAvailableRiskCapital(
+                account,
+                _settings.DrawdownMode,
+                out _,
+                minAccountBalanceOverride: _settings.MinAccountBalanceOverride
+            );
+
+            if (availableRiskCapital <= 0)
                 return new AccountMetrics(0, 0, 0, 0, 0);
 
             var costPerContract = GetCostPerContract();
             if (costPerContract <= 0)
-                return new AccountMetrics(availableDrawdown, null, null, null, null);
+                return new AccountMetrics(availableRiskCapital, null, null, null, null);
 
             var (absVaR, relVaR) = CalculateValueAtRisk(account);
-            double liquidationThreshold = account.Balance - availableDrawdown;
+            double liquidationThreshold = account.Balance - availableRiskCapital;
             double clutchTriggerBalance = liquidationThreshold + _settings.ClutchModeBudget;
 
             if (clutchTriggerBalance <= 0)
-                return new AccountMetrics(availableDrawdown, null, null, absVaR, relVaR);
+                return new AccountMetrics(availableRiskCapital, null, null, absVaR, relVaR);
 
             int tradesToClutch = GetNormalTrades(
                 startBalance: account.Balance,
@@ -62,7 +68,7 @@ namespace AutoSizeStrategy
             );
 
             return new AccountMetrics(
-                RiskCapital: availableDrawdown,
+                RiskCapital: availableRiskCapital,
                 TradesToClutchMode: tradesToClutch,
                 TradesToBust: tradesToClutch + clutchTrades,
                 AbsoluteValueAtRisk: absVaR,
@@ -140,16 +146,6 @@ namespace AutoSizeStrategy
             double absolute = Math.Min(totalAbsolute, maxExposure);
             double relativePct = maxExposure > 0 ? (absolute / maxExposure) * 100.0 : 0;
             return (absolute, relativePct);
-        }
-
-        private double GetAvailableDrawdown(IAccount account)
-        {
-            return RiskCalculator.GetAvailableDrawdown(
-                account,
-                _settings.DrawdownMode,
-                out _,
-                minAccountBalanceOverride: _settings.MinAccountBalanceOverride
-            );
         }
 
         private double GetCostPerContract()

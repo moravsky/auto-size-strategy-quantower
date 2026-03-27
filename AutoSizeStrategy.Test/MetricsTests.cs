@@ -97,7 +97,7 @@ namespace AutoSizeStrategy.Test
         [InlineData(146200, 700, 1)] // Deep in Clutch Mode, two trades lost
         public void GetAccountMetrics_ClutchModeBalances_ReturnCorrectMetrics(
             double balance,
-            double expectedDrawdown,
+            double expectedRiskCapital,
             int expectedTradesToBust
         )
         {
@@ -106,7 +106,7 @@ namespace AutoSizeStrategy.Test
 
             var result = metrics.GetAccountMetrics();
 
-            Assert.Equal(expectedDrawdown, result.RiskCapital);
+            Assert.Equal(expectedRiskCapital, result.RiskCapital);
             Assert.Equal(0, result.TradesToClutchMode);
             Assert.Equal(expectedTradesToBust, result.TradesToBust);
         }
@@ -155,7 +155,7 @@ namespace AutoSizeStrategy.Test
         [InlineData(146200, 700, 1)] // Deep in Clutch Mode, two trades lost
         public void GetAccountMetrics_EODAccount_ClutchModeBalances_ReturnCorrectMetrics(
             double balance,
-            double expectedDrawdown,
+            double expectedRiskCapital,
             int expectedTradesToBust
         )
         {
@@ -166,7 +166,7 @@ namespace AutoSizeStrategy.Test
 
             var result = metrics.GetAccountMetrics();
 
-            Assert.Equal(expectedDrawdown, result.RiskCapital);
+            Assert.Equal(expectedRiskCapital, result.RiskCapital);
             Assert.Equal(0, result.TradesToClutchMode);
             Assert.Equal(expectedTradesToBust, result.TradesToBust);
         }

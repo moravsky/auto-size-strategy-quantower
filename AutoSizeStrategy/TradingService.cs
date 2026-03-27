@@ -10,10 +10,7 @@ namespace AutoSizeStrategy
     public interface ITradingService : IDisposable
     {
         bool Cancel(string orderId);
-        bool Cancel(IOrder order, bool useLeadingJitter = false);
-        bool Place(IPlaceOrderRequestParameters parameters, bool useLeadingJitter = false);
         bool CancelReplace(string originalOrderId, IPlaceOrderRequestParameters newParams);
-        bool CancelReplace(IOrder originalOrder, IPlaceOrderRequestParameters newParams);
 
         IEnumerable<IPosition> GetPositions(IAccount account);
         IEnumerable<IOrder> GetWorkingOrders(IAccount account);
