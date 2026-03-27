@@ -52,6 +52,7 @@ namespace AutoSizeStrategy
         {
             InitializeRiskManagementGroup();
             InitializeAccountLongevityGroup();
+            InitializeExecutionCostsGroup();
         }
 
         private void InitializeRiskManagementGroup()
@@ -112,6 +113,11 @@ namespace AutoSizeStrategy
                 Maximum = 100.0,
                 Increment = 0.1,
                 DecimalPlaces = 1,
+                Description = """
+                              Risk capital allocated per trade as a percentage of available risk capital / drawdown.
+                              
+                              Example: $150,000 static account at 8% -> $12,000 risk budget per trade.
+                              """
             };
             riskPercentSetting.PropertyChanged += (_, _) =>
                 this.RiskPercent = (double)riskPercentSetting.Value;
@@ -209,13 +215,17 @@ namespace AutoSizeStrategy
 
         private void InitializeAccountLongevityGroup()
         {
-            var stopLossSetting = new SettingItemInteger(
-                "Initial Stop Loss Ticks",
-                this.MinimumStopLossTicks
-            )
+            var stopLossSetting = new SettingItemInteger("Initial Stop Loss Ticks", this.MinimumStopLossTicks)
             {
                 Minimum = 1,
                 Increment = 1,
+                Description = """
+                              Minimum stop distance used for metrics calculations before your first trade.
+
+                              No stop order is placed by this setting — it is used only to estimate
+                              trades-to-bust and similar metrics at startup. Once you place a real order
+                              with a stop loss, your stop distance is used instead.
+                              """,
             };
             stopLossSetting.PropertyChanged += (_, _) =>
                 this.MinimumStopLossTicks = (int)stopLossSetting.Value;
@@ -265,10 +275,11 @@ namespace AutoSizeStrategy
                 Increment = 0.01,
                 DecimalPlaces = 2,
                 Description = """
-                              The dollar amount reserved for 'Clutch Mode'.
+                              The dollar amount reserved for 'Clutch Mode' — a sequence of elevated-risk
+                              trades designed to recover from a deep drawdown.
 
-                              This is a sequence of trades with elevated risk designed to
-                              bring the account out of a deep drawdown.
+                              Set to 0 to disable. With Clutch Mode off, 'Trades to Bust' reflects
+                              pure consecutive max losers at your target risk percent.
                               """,
             };
             clutchModeBudgetSetting.PropertyChanged += (_, _) =>
@@ -307,9 +318,6 @@ namespace AutoSizeStrategy
                     "Account Longevity",
                     [
                         stopLossSetting,
-                        slippageSetting,
-                        commMicroSetting,
-                        commMiniSetting,
                         clutchModeBudgetSetting,
                         clutchModeRiskSequenceSetting,
                     ]
@@ -339,6 +347,44 @@ namespace AutoSizeStrategy
             }
 
             return true;
+        }
+
+        private void InitializeExecutionCostsGroup()
+        {
+            var slippageSetting = new SettingItemDouble("Average Slippage Ticks", this.AverageSlippageTicks)
+            {
+                Minimum = 0.0,
+                Increment = 0.1,
+                DecimalPlaces = 1,
+            };
+            slippageSetting.PropertyChanged += (_, _) => this.AverageSlippageTicks = (double)slippageSetting.Value;
+
+            var commMicroSetting = new SettingItemDouble("Commission Micro (Per Side)", this.CommissionMicro)
+            {
+                Minimum = 0.0,
+                Increment = 0.01,
+                DecimalPlaces = 2,
+            };
+            commMicroSetting.PropertyChanged += (_, _) => this.CommissionMicro = (double)commMicroSetting.Value;
+
+            var commMiniSetting = new SettingItemDouble("Commission Mini (Per Side)", this.CommissionMini)
+            {
+                Minimum = 0.0,
+                Increment = 0.01,
+                DecimalPlaces = 2,
+            };
+            commMiniSetting.PropertyChanged += (_, _) => this.CommissionMini = (double)commMiniSetting.Value;
+
+            _additionalSettings.Add(
+                new SettingItemGroup(
+                    "Execution Costs", // <--- Creates the new tab/group
+                    [
+                        slippageSetting,
+                        commMicroSetting,
+                        commMiniSetting,
+                    ]
+                )
+            );
         }
     }
 }
