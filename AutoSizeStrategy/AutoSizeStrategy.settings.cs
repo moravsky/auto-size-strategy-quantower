@@ -10,7 +10,7 @@ namespace AutoSizeStrategy
         IAccount IStrategySettings.CurrentAccount =>
             CurrentAccount != null ? new AccountWrapper(CurrentAccount) : null;
 
-        public double RiskPercent { get; set; } = 8.0;
+        public double RiskPercent { get; set; } = 2.5;
 
         public MissingStopLossAction MissingStopLossAction { get; set; } =
             MissingStopLossAction.Reject;
