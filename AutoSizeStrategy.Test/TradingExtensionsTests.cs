@@ -333,8 +333,6 @@ namespace AutoSizeStrategy.Test
             }
         }
 
-        #region IsMicro
-
         [Theory]
         [InlineData("MNQ", true)]
         [InlineData("MES", true)]
@@ -353,6 +351,23 @@ namespace AutoSizeStrategy.Test
             Assert.Equal(expected, symbolMock.Object.IsMicro());
         }
 
-        #endregion
+        [Theory]
+        [InlineData("MNQ", 0.25)]
+        [InlineData("MES", 0.25)]
+        [InlineData("MGC", 0.25)]
+        [InlineData("NQ", 2.50)]
+        [InlineData("GC", 2.50)]
+        [InlineData("ES", 2.50)]
+        public void GetCommission_ReturnsCorrectRate(string symbolId, double expected)
+        {
+            var symbolMock = new Mock<ISymbol>();
+            symbolMock.SetupGet(s => s.Id).Returns(symbolId);
+
+            var settingsMock = new Mock<IStrategySettings>();
+            settingsMock.SetupGet(s => s.CommissionMicro).Returns(0.25);
+            settingsMock.SetupGet(s => s.CommissionMini).Returns(2.50);
+
+            Assert.Equal(expected, settingsMock.Object.GetCommission(symbolMock.Object));
+        }
     }
 }

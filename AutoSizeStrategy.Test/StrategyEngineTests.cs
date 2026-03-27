@@ -38,6 +38,9 @@ namespace AutoSizeStrategy.Test
             _settingsMock.SetupGet(s => s.MaxContractsMicro).Returns(0);
             _settingsMock.SetupGet(s => s.MaxContractsMini).Returns(0);
             _settingsMock.SetupGet(s => s.DrawdownMode).Returns(DrawdownMode.Static);
+            _settingsMock.SetupGet(s => s.CommissionMicro).Returns(0.25);
+            _settingsMock.SetupGet(s => s.CommissionMini).Returns(2.50);
+            _settingsMock.SetupGet(s => s.AverageSlippageTicks).Returns(1.0);
 
             var metrics = new Metrics(_settingsMock.Object);
             _contextMock.SetupGet(c => c.Metrics).Returns(metrics);
@@ -80,7 +83,7 @@ namespace AutoSizeStrategy.Test
                     },
                     // STATIC SCENARIO (Personal/Sim)
                     // No Thresholds provided. Uses raw Balance.
-                    { "SimPersonal", 150_000, new Dictionary<string, string>(), 150 },
+                    { "SimPersonal", 150_000, new Dictionary<string, string>(), 142 },
                     // EDGE CASE: TIGHT TRAILING STOP
                     // Demonstrates what happens when the trailing stop is very close to balance.
                     { "TPPRO149900", 150_000, new Dictionary<string, string>
@@ -189,17 +192,17 @@ namespace AutoSizeStrategy.Test
             // netPosition, side, requestedQty, stopLossTicks, expectedQty (Max Risk = 150 @ 20 ticks)
 
             // ENTRIES (NetPos == 0)
-            { 0.0, Side.Buy, 1.0, 20.0, 150.0 }, // Magic "Buy 1" -> Upsized to max risk
-            { 0.0, Side.Buy, 1000.0, 20.0, 150.0 }, // Oversized Entry -> Capped at max risk
+            { 0.0, Side.Buy, 1.0, 20.0, 142.0 }, // Magic "Buy 1" -> Upsized to max risk
+            { 0.0, Side.Buy, 1000.0, 20.0, 142.0 }, // Oversized Entry -> Capped at max risk
 
-            // PYRAMIDING (NetPos > 0)
-            { 3.0, Side.Buy, 1.0, 20.0, 147.0 }, // Magic "Buy 1" Top-up -> Upsized to remaining
-            { 3.0, Side.Buy, 1000.0, 20.0, 147.0 }, // Oversized Top-up -> Capped at remaining
+            // ADDING (NetPos > 0)
+            { 3.0, Side.Buy, 1.0, 20.0, 139.0 }, // Magic "Buy 1" Top-up -> Upsized to remaining
+            { 3.0, Side.Buy, 1000.0, 20.0, 139.0 }, // Oversized Top-up -> Capped at remaining
             { 150.0, Side.Buy, 10.0, 20.0, 0.0 }, // Already maxed -> Cancels to 0
 
             // REVERSALS (NetPos opposite of order)
-            { 10.0, Side.Sell, 11.0, 20.0, 160.0 }, // Reversal Trigger (>10) -> Upsized to max short (10 + 150)
-            { 10.0, Side.Sell, 1000.0, 20.0, 160.0 }, // Oversized Flip -> Capped at max short
+            { 10.0, Side.Sell, 11.0, 20.0, 152.0 }, // Reversal Trigger (>10) -> Upsized to max short (10 + 150)
+            { 10.0, Side.Sell, 1000.0, 20.0, 152.0 }, // Oversized Flip -> Capped at max short
 
             // EXITS (Bypasses risk sizing entirely)
             { 10.0, Side.Sell, 5.0, 20.0, 5.0 }, // Partial Exit WITH Stop Loss -> Passes
@@ -325,7 +328,7 @@ namespace AutoSizeStrategy.Test
 
             _engine.ProcessRequest(request);
 
-            Assert.Equal(75, request.Quantity);
+            Assert.Equal(72, request.Quantity);
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(msg => msg.Contains("Changed request"))),
                 Times.Once
@@ -550,17 +553,17 @@ namespace AutoSizeStrategy.Test
         // calculatedSize = 150 (balance $150k, risk 10%, stop 20 ticks * $5/tick)
 
         // Cap disabled
-        [InlineData(0, "MNQ", 0, 150, false)] // Micro, disabled -> uncapped
-        [InlineData(0, "NQ", 0, 150, false)] // Mini, disabled -> uncapped
+        [InlineData(0, "MNQ", 0, 142, false)] // Micro, disabled -> uncapped
+        [InlineData(0, "NQ", 0, 136, false)] // Mini, disabled -> uncapped
 
         // Cap below calculatedSize
         [InlineData(50, "MNQ", 0, 50, true)] // Micro, cap hit -> clamped
         [InlineData(50, "NQ", 0, 50, true)] // Mini, cap hit -> clamped
 
         // Cap above calculatedSize
-        [InlineData(200, "MNQ", 0, 150, false)] // Micro, cap not hit -> uncapped
+        [InlineData(200, "MNQ", 0, 142, false)] // Micro, cap not hit -> uncapped
 
-        // Pyramiding off capped size: cap=10, position=7 -> remaining=3
+        // Adding off capped size: cap=10, position=7 -> remaining=3
         [InlineData(10, "MNQ", 7, 3, true)]
 
         // Position already at cap: cap=10, position=10 -> cancel (qty=0)

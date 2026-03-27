@@ -5,168 +5,88 @@ namespace AutoSizeStrategy.Test
 {
     public class RiskCalculatorTests
     {
-        #region CalculatePositionSize
+        #region Sizing and Cost Math
+
         [Theory]
-        // positionRisk, stopDistanceTicks, tickValue, expectedSize
-        [InlineData(500, 20, 5, 5)]
-        [InlineData(500, 30, 5, 3)]
-        [InlineData(100, 40, 0.5, 5)]
-        [InlineData(300, 25, 1, 12)]
-        public void CalculatePositionSize3_Scenarios_CalculateCorrectly(
+        [InlineData(500, 100, 5)]
+        [InlineData(500, 150, 3)] // 500/150 = 3.33 -> 3
+        [InlineData(100, 20, 5)]
+        [InlineData(300, 25, 12)]
+        [InlineData(50, 100, 0)] // Risk too small for 1 contract
+        public void CalculatePositionSize_Scenarios_CalculateCorrectly(
             double positionRisk,
+            double costPerContract,
+            double expectedSize
+        )
+        {
+            int size = RiskCalculator.CalculatePositionSize(positionRisk, costPerContract);
+            Assert.Equal(expectedSize, size);
+        }
+
+        [Theory]
+        // STANDARD (ES-like): Stop 5pts (20 ticks). Tick Value $5. No slip/comm. -> 20 * 5 = 100
+        [InlineData(20, 5, 0, 0, 100)]
+        // MICROS (MES-like): Stop 10pts (40 ticks). Tick Value $1.25. Slip 1 tick. Comm $0.50. -> (40+1)*1.25 + 0.50 = 51.75
+        [InlineData(40, 1.25, 1, 0.50, 51.75)]
+        // NASDAQ (NQ-like): Stop 20pts (80 ticks). Tick Value $5. Slip 2 ticks. Comm $5. -> (80+2)*5 + 5 = 415
+        [InlineData(80, 5, 2, 5, 415)]
+        // CRUDE OIL (CL-like): Stop 30 ticks. Tick Value $10. Slip 0. Comm $3. -> 30*10 + 3 = 303
+        [InlineData(30, 10, 0, 3, 303)]
+        public void CalculateCostPerContract_Scenarios_ReturnCorrectCost(
             double stopDistanceTicks,
             double tickValue,
-            double expectedSize
+            double slippageTicks,
+            double roundTripCommission,
+            double expectedCost
         )
         {
-            int size = RiskCalculator.CalculatePositionSize(
-                positionRisk,
+            double cost = RiskCalculator.CalculateCostPerContract(
                 stopDistanceTicks,
-                tickValue
+                tickValue,
+                slippageTicks,
+                roundTripCommission
             );
-            Assert.Equal(expectedSize, size);
+
+            Assert.Equal(expectedCost, cost);
         }
 
         [Theory]
-        // STANDARD (ES-like): Risk $500. Stop 5pts (20 ticks).
-        // Risk/Contract: 20 ticks * $5/tick = $100.
-        // Result: 500 / 100 = 5.
-        [InlineData(500, 5005, 5000, 0.25, 5, 5)]
-        // ROUNDING DOWN: Risk $590. Stop 5pts ($100 risk).
-        // Result: 590 / 100 = 5.9 -> Floors to 5.
-        [InlineData(590, 5005, 5000, 0.25, 5, 5)]
-        // MICROS (MES-like): Risk $200. Stop 10pts (40 ticks).
-        // Tick Value $1.25.
-        // Risk/Contract: 40 * 1.25 = $50.
-        // Result: 200 / 50 = 4.
-        [InlineData(200, 4100, 4090, 0.25, 1.25, 4)]
-        // NASDAQ (NQ-like): Risk $1,000. Stop 20pts (80 ticks).
-        // Tick Value $5.
-        // Risk/Contract: 80 * 5 = $400.
-        // Result: 1000 / 400 = 2.5 -> Floors to 2.
-        [InlineData(1000, 15020, 15000, 0.25, 5, 2)]
-        // CRUDE OIL (CL-like): Risk $800. Stop 30 ticks ($0.30 price).
-        // Tick Size 0.01. Tick Value $10.
-        // Risk/Contract: 30 * 10 = $300.
-        // Result: 800 / 300 = 2.66 -> Floors to 2.
-        [InlineData(800, 75.30, 75.00, 0.01, 10, 2)]
-        // GOLD (GC-like): Risk $500. Stop 20 ticks ($2.00 price).
-        // Tick Size 0.1. Tick Value $10.
-        // Risk/Contract: 20 * 10 = $200.
-        // Result: 500 / 200 = 2.5 -> Floors to 2.
-        [InlineData(500, 2002.0, 2000.0, 0.1, 10, 2)]
-        // CURRENCY (6E-like): Risk $500. Stop 20 ticks (0.0010 price).
-        // Tick Size 0.00005. Tick Value $6.25.
-        // Risk/Contract: 20 * 6.25 = $125.
-        // Result: 500 / 125 = 4.
-        [InlineData(500, 1.1010, 1.1000, 0.00005, 6.25, 4)]
-        // UNDERSIZED: Risk $50. Stop 5pts ES ($100 risk).
-        // Result: 50 / 100 = 0.5 -> Floors to 0.
-        [InlineData(50, 4105, 4100, 0.25, 5, 0)]
-        // BARELY ENOUGH: Risk $100. Stop 5pts ES ($100 risk).
-        // Result: Exact match = 1.
-        [InlineData(100, 4105, 4100, 0.25, 5, 1)]
-        // STOP AT ENTRY: Risk $100. Stop 0pts ES.
-        // Result: Not allowed in UI, should return 0 -> cancel request
-        [InlineData(100, 4100, 4100, 0.25, 5, 0)]
-        public void CalculatePositionSize5_Scenarios_ReturnCorrectSize(
-            double positionRisk,
-            double entryPrice,
-            double exitPrice,
-            double tickSize,
-            double tickValue,
-            double expectedSize
-        )
-        {
-            int size = RiskCalculator.CalculatePositionSize(
-                positionRisk,
-                entryPrice,
-                exitPrice,
-                tickSize,
-                tickValue
-            );
-
-            Assert.Equal(expectedSize, size);
-        }
-
-        [Theory]
-        [InlineData(500, 0, 5)] // zero stop
-        [InlineData(500, 20, 0)] // zero tick value
-        public void CalculatePositionSize3_InvalidInputs_ThrowsArgumentException(
-            double positionRisk,
-            double stop,
-            double tickVal
-        )
+        [InlineData(0, 5, 0, 0)] // zero stop
+        [InlineData(20, 0, 0, 0)] // zero tick value
+        [InlineData(20, 5, -1, 0)] // negative slip
+        [InlineData(20, 5, 0, -1)] // negative comm
+        public void CalculateCostPerContract_InvalidInputs_ThrowsArgumentException(
+            double stop, double tick, double slip, double comm)
         {
             Assert.Throws<ArgumentOutOfRangeException>(() =>
-                RiskCalculator.CalculatePositionSize(positionRisk, stop, tickVal)
+                RiskCalculator.CalculateCostPerContract(stop, tick, slip, comm)
             );
         }
 
         [Theory]
-        [InlineData(1000, 6000, 6005, 0, 50)] // zero tick size
-        [InlineData(1000, 6000, 6005, -0.25, 50)] // negative tick size
-        public void CalculatePositionSize5_InvalidInputs_ThrowsArgumentException(
-            double positionRisk,
-            double entryPrice,
-            double stopPrice,
-            double tickSize,
-            double tickValue
-        )
-        {
-            Assert.Throws<ArgumentOutOfRangeException>(() =>
-                RiskCalculator.CalculatePositionSize(
-                    positionRisk,
-                    entryPrice,
-                    stopPrice,
-                    tickSize,
-                    tickValue
-                )
-            );
-        }
-
-        [Theory]
-        [InlineData(double.NaN, 20, 5)]
-        [InlineData(double.PositiveInfinity, 20, 5)]
-        [InlineData(500, double.NaN, 5)]
-        [InlineData(500, 20, double.NegativeInfinity)]
-        public void CalculatePositionSize3_NonFiniteInputs_ThrowsException(
-            double positionRisk,
-            double stopTicks,
-            double tickVal
-        )
-        {
-            // These should trigger MathUtil.ValidateFinite
-            Assert.ThrowsAny<ArgumentException>(() =>
-                RiskCalculator.CalculatePositionSize(positionRisk, stopTicks, tickVal)
-            );
-        }
-
-        [Theory]
-        [InlineData(double.NaN, 5000, 4990, 0.25, 5)]
-        [InlineData(500, double.PositiveInfinity, 4990, 0.25, 5)]
-        [InlineData(500, 5000, double.NaN, 0.25, 5)]
-        [InlineData(500, 5000, 4990, double.NegativeInfinity, 5)]
-        [InlineData(500, 5000, 4990, 0.25, double.PositiveInfinity)]
-        public void CalculatePositionSize5_NonFiniteInputs_ThrowsException(
-            double risk,
-            double entry,
-            double stop,
-            double tickSize,
-            double tickVal
-        )
+        [InlineData(double.NaN, 5, 0, 0)]
+        [InlineData(20, double.PositiveInfinity, 0, 0)]
+        [InlineData(20, 5, double.NaN, 0)]
+        [InlineData(20, 5, 0, double.NegativeInfinity)]
+        public void CalculateCostPerContract_NonFiniteInputs_ThrowsException(
+            double stop, double tick, double slip, double comm)
         {
             Assert.ThrowsAny<ArgumentException>(() =>
-                RiskCalculator.CalculatePositionSize(risk, entry, stop, tickSize, tickVal)
+                RiskCalculator.CalculateCostPerContract(stop, tick, slip, comm)
             );
         }
 
-        [Fact]
-        public void CalculatePositionSize_RiskTooSmall_ReturnsZeroContracts()
+        [Theory]
+        [InlineData(double.NaN, 100)]
+        [InlineData(500, double.NaN)]
+        [InlineData(double.PositiveInfinity, 100)]
+        [InlineData(500, double.PositiveInfinity)]
+        public void CalculatePositionSize_NonFiniteInputs_ThrowsException(
+            double risk, double cost)
         {
-            // $5 risk, 20 tick stop, $5/tick = 0.05 contracts -> should be rounded down to zero
-            int size = RiskCalculator.CalculatePositionSize(5, 20, 5);
-            Assert.Equal(0, size);
+            Assert.ThrowsAny<ArgumentException>(() =>
+                RiskCalculator.CalculatePositionSize(risk, cost)
+            );
         }
 
         #endregion
@@ -176,7 +96,7 @@ namespace AutoSizeStrategy.Test
         [Fact]
         public void GetStopDistanceTicks_AbsolutePriceMeasurement_ReturnsCorrect()
         {
-            var slTpHolder = SlTpHolder.CreateSL(5995/*,  PriceMeasurement.Absolute */);
+            var slTpHolder = SlTpHolder.CreateSL(5995 /*,  PriceMeasurement.Absolute */);
             double stopDistanceTicks = RiskCalculator.GetStopDistanceTicks(slTpHolder, 0.25, 6000);
             Assert.Equal(20, stopDistanceTicks);
         }
@@ -204,7 +124,7 @@ namespace AutoSizeStrategy.Test
             double tickSize
         )
         {
-            var slTpHolder = SlTpHolder.CreateSL(stopPrice/*, PriceMeasurement.Absolute*/);
+            var slTpHolder = SlTpHolder.CreateSL(stopPrice /*, PriceMeasurement.Absolute*/);
             Assert.ThrowsAny<ArgumentException>(() =>
                 RiskCalculator.GetStopDistanceTicks(slTpHolder, tickSize, entryPrice)
             );
@@ -636,6 +556,7 @@ namespace AutoSizeStrategy.Test
             {
                 mock.SetupGet(a => a.AdditionalInfo).Returns(additionalInfo);
             }
+
             return mock.Object;
         }
     }

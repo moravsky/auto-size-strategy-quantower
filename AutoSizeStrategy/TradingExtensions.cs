@@ -24,6 +24,9 @@ namespace AutoSizeStrategy
             return MicroContractPattern().IsMatch(symbol.Id);
         }
 
+        public static double GetCommission(this IStrategySettings settings, ISymbol symbol) =>
+            symbol.IsMicro() ? settings.CommissionMicro : settings.CommissionMini;
+
         public static DrawdownMode InferDrawdownMode(this IAccount account)
         {
             ArgumentNullException.ThrowIfNull(account);

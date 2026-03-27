@@ -75,8 +75,8 @@ namespace AutoSizeStrategy.Test
         }
 
         [Theory]
-        [InlineData(150000, 15)] // Full Start: 12 standard + 3 clutch = 15
-        [InlineData(147500, 7)] // Mid-Drawdown ($2k buffer): Standard trades reduced
+        [InlineData(150000, 16)] // Full Start: 13 standard + 3 clutch = 16
+        [InlineData(147500, 8)] // Mid-Drawdown ($2k buffer): Standard trades reduced
         public void GetAccountMetrics_StandardScenarios_ReturnCorrectMetrics(
             double balance,
             int expectedTrades
@@ -112,8 +112,8 @@ namespace AutoSizeStrategy.Test
         }
 
         [Theory]
-        [InlineData(150000, 15)] // Full Start: 12 standard + 3 clutch = 15
-        [InlineData(147500, 7)] // Mid-Drawdown ($2k buffer): Standard trades reduced
+        [InlineData(150000, 16)] // Full Start: 13 standard + 3 clutch = 16
+        [InlineData(147500, 8)] // Mid-Drawdown ($2k buffer): Standard trades reduced
         public void GetAccountMetrics_EODAccount_StandardScenarios_ReturnCorrectMetrics(
             double balance,
             int expectedTrades
@@ -131,8 +131,8 @@ namespace AutoSizeStrategy.Test
         }
 
         [Theory]
-        [InlineData(155000, 16)]
-        [InlineData(152000, 7)]
+        [InlineData(155000, 17)]
+        [InlineData(152000, 8)]
         public void GetAccountMetrics_EODAccount_RaisedDradown_ReturnCorrectMetrics(
             double balance,
             int expectedTrades

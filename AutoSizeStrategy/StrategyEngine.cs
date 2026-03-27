@@ -132,10 +132,19 @@ namespace AutoSizeStrategy
             context.Metrics.LastSymbol = symbol;
             context.Metrics.LastStopDistanceTicks = stopDistanceTicks;
 
+            double roundTripCommission = context.Settings.GetCommission(symbol) * 2;
+            double slippageTicks = context.Settings.AverageSlippageTicks;
+
+            double costPerContract = RiskCalculator.CalculateCostPerContract(
+                stopDistanceTicks,
+                tickValue,
+                slippageTicks,
+                roundTripCommission
+            );
+
             int calculatedSize = RiskCalculator.CalculatePositionSize(
                 positionRisk,
-                stopDistanceTicks,
-                tickValue
+                costPerContract
             );
 
             // Apply max contracts cap (0 = disabled)

@@ -24,81 +24,48 @@ namespace AutoSizeStrategy
     */
     public static class RiskCalculator
     {
-        // TODO: factor commisions and slippage into calculation
-        /// Calculates the maximum position size based on the position risk, stop distance, and tick value.
-        public static int CalculatePositionSize(
-            double positionRisk,
+        public static double CalculateCostPerContract(
             double stopDistanceTicks,
-            double tickValue
+            double tickValue,
+            double slippageTicks,
+            double commission
         )
         {
-            MathUtil.ValidateFinite(positionRisk, nameof(positionRisk));
             MathUtil.ValidateFinite(stopDistanceTicks, nameof(stopDistanceTicks));
             MathUtil.ValidateFinite(tickValue, nameof(tickValue));
+            MathUtil.ValidateFinite(slippageTicks, nameof(slippageTicks));
+            MathUtil.ValidateFinite(commission, nameof(commission));
 
-            // Could happen in a valid scenario
-            if (positionRisk <= 0)
-            {
-                return 0;
-            }
-
-            // This is a configuration error if false (Impossible Instrument).
             if (tickValue <= 0)
-            {
                 throw new ArgumentOutOfRangeException(nameof(tickValue), "Tick value must be positive");
-            }
 
-            // Stop distance must be positive to avoid Division by Zero.
-            // If stop is 0, logic is broken (Entry == Stop).
             if (stopDistanceTicks <= 0)
-            {
                 throw new ArgumentOutOfRangeException(nameof(stopDistanceTicks), "Stop distance must be > 0");
-            }
 
-            // Calculate position size
-            double rawResult = positionRisk / (stopDistanceTicks * tickValue);
-            int positionSize = (int)Math.Floor(rawResult + MathUtil.Epsilon);
+            if (slippageTicks < 0)
+                throw new ArgumentOutOfRangeException(nameof(slippageTicks), "Slippage cannot be negative");
 
-            return positionSize;
+            if (commission < 0)
+                throw new ArgumentOutOfRangeException(nameof(commission), "Commission cannot be negative");
+
+            return (stopDistanceTicks + slippageTicks) * tickValue + commission;
         }
 
         public static int CalculatePositionSize(
             double positionRisk,
-            double entryPrice,
-            double stopPrice,
-            double tickSize,
-            double tickValue
+            double costPerContract
         )
         {
             MathUtil.ValidateFinite(positionRisk, nameof(positionRisk));
-            MathUtil.ValidateFinite(entryPrice, nameof(entryPrice));
-            MathUtil.ValidateFinite(stopPrice, nameof(stopPrice));
-            MathUtil.ValidateFinite(tickSize, nameof(tickSize));
-            MathUtil.ValidateFinite(tickValue, nameof(tickValue));
+            MathUtil.ValidateFinite(costPerContract, nameof(costPerContract));
 
-            if (tickSize <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(tickSize), "Tick size must be positive");
-            }
-
-            if (tickValue <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(tickValue), "Tick value must be positive");
-            }
-
-            // Calculate stop distance in ticks
-            double stopDistanceTicks = Math.Round(
-                Math.Abs(entryPrice - stopPrice) / tickSize,
-                MidpointRounding.AwayFromZero
-            );
-
-            if (stopDistanceTicks <= 0)
+            if (positionRisk <= 0 || costPerContract <= 0)
             {
                 return 0;
             }
 
-            // Calculate position size
-            return CalculatePositionSize(positionRisk, stopDistanceTicks, tickValue);
+            double rawResult = positionRisk / costPerContract;
+            return (int)Math.Floor(rawResult + MathUtil.Epsilon);
         }
 
         public static double GetStopDistanceTicks(
@@ -133,7 +100,6 @@ namespace AutoSizeStrategy
             }
         }
 
-        // Raw dollar amount between current balance and the bust level.
         public static double GetAvailableDrawdown(
             IAccount account,
             DrawdownMode mode,
@@ -169,13 +135,14 @@ namespace AutoSizeStrategy
                         )
                         {
                             reason = "Missing 'AutoLiquidateThresholdCurrentValue' in Account Info";
-                            return 0; // FAIL SAFE
+                            return 0;
                         }
+
                         availableDrawdown = account.Balance - autoLiqCurrent;
                         break;
                     case DrawdownMode.EndOfDay:
                         reason = "EOD mode requires 'Minimum Account Balance (Override)' to be set";
-                        return 0; // FAIL SAFE
+                        return 0;
                     default:
                         throw new ArgumentOutOfRangeException(
                             nameof(mode),
@@ -192,7 +159,6 @@ namespace AutoSizeStrategy
 
             if (availableDrawdown > account.Balance)
             {
-                // Edge case: Bad data shouldn't allow risking more than the entire account
                 availableDrawdown = account.Balance;
                 reason = "Drawdown capped at Account Balance (Calculation exceeded balance)";
             }
@@ -205,8 +171,6 @@ namespace AutoSizeStrategy
             return availableDrawdown;
         }
 
-        /// Determines the amount of capital that can be risked based on the account balance,
-        /// previous EOD balance (for EOD accounts only) and the selected drawdown mode, then applies the risk percentage.
         public static double CalculatePositionRisk(
             IAccount account,
             double riskPercent,

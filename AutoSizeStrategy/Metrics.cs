@@ -35,13 +35,14 @@ namespace AutoSizeStrategy
             if (availableDrawdown <= 0)
                 return new AccountMetrics(0, 0, 0, 0, 0);
 
-            var (stopTicks, tickVal, lossPerContract) = GetUnitEconomics();
-            if (!double.IsFinite(tickVal) || tickVal <= 0)
+            var costPerContract = GetCostPerContract();
+            if (costPerContract <= 0)
                 return new AccountMetrics(availableDrawdown, null, null, null, null);
 
             var (absVaR, relVaR) = CalculateValueAtRisk(account);
             double liquidationThreshold = account.Balance - availableDrawdown;
             double clutchTriggerBalance = liquidationThreshold + _settings.ClutchModeBudget;
+
             if (clutchTriggerBalance <= 0)
                 return new AccountMetrics(availableDrawdown, null, null, absVaR, relVaR);
 
@@ -49,9 +50,7 @@ namespace AutoSizeStrategy
                 startBalance: account.Balance,
                 endBalance: clutchTriggerBalance,
                 hardFloor: liquidationThreshold,
-                stopTicks,
-                tickVal,
-                lossPerContract,
+                costPerContract,
                 _settings.RiskPercent / 100.0
             );
 
@@ -59,9 +58,7 @@ namespace AutoSizeStrategy
                 currentBalance: account.Balance,
                 clutchTriggerBalance,
                 hardFloor: liquidationThreshold,
-                stopTicks,
-                tickVal,
-                lossPerContract
+                costPerContract
             );
 
             return new AccountMetrics(
@@ -81,8 +78,7 @@ namespace AutoSizeStrategy
                 : account.Balance;
         }
 
-        private (double absolute, double relativePct) CalculateValueAtRisk(
-            IAccount account)
+        private (double absolute, double relativePct) CalculateValueAtRisk(IAccount account)
         {
             if (account == null)
                 return (double.NaN, double.NaN);
@@ -110,7 +106,6 @@ namespace AutoSizeStrategy
                         && (o.OrderTypeId == OrderType.Stop
                             || o.OrderTypeId == OrderType.StopLimit
                             || o.OrderTypeId == OrderType.TrailingStop))
-                    // Order so the closest protective stops (least risk) are applied first
                     .OrderByDescending(o => pos.Side == Side.Buy ? o.GetLikelyFillPrice() : -o.GetLikelyFillPrice())
                     .ToList();
 
@@ -123,23 +118,21 @@ namespace AutoSizeStrategy
 
                     double expectedExitPrice = stop.GetLikelyFillPrice();
                     double distanceTicks = Math.Abs(pos.OpenPrice - expectedExitPrice) / tickSize;
-
-                    // Cap the calculated quantity to the remaining unprotected amount
                     double protectedQty = Math.Min(stop.TotalQuantity, unprotectedQty);
-                    double slippageCost = _settings.AverageSlippageTicks * tickValue * protectedQty;
 
-                    double commissionPerContract = pos.Symbol.IsMicro()
-                        ? _settings.CommissionMicro
-                        : _settings.CommissionMini;
-                    double commissionCost = commissionPerContract * protectedQty;
+                    double exitCostPerContract = RiskCalculator.CalculateCostPerContract(
+                        distanceTicks,
+                        tickValue,
+                        _settings.AverageSlippageTicks,
+                        _settings.GetCommission(pos.Symbol) // exit only, one side
+                    );
 
-                    totalAbsolute += (distanceTicks * tickValue * protectedQty) + slippageCost + commissionCost;
+                    totalAbsolute += exitCostPerContract * protectedQty;
                     unprotectedQty -= protectedQty;
                 }
 
                 if (unprotectedQty > MathUtil.Epsilon)
                 {
-                    // If any portion of the position is unprotected, it bounds to max broker exposure
                     return (maxExposure, 100.0);
                 }
             }
@@ -159,33 +152,28 @@ namespace AutoSizeStrategy
             );
         }
 
-        private (double stopTicks, double tickVal, double lossPerContract) GetUnitEconomics()
+        private double GetCostPerContract()
         {
             double stopTicks = Math.Max(LastStopDistanceTicks, _settings.MinimumStopLossTicks);
             double tickVal = LastSymbol.GetTickCost(LastSymbol.Last);
 
-            if (double.IsNaN(tickVal) || tickVal <= 0)
-                return (stopTicks, 0, 0);
+            if (!double.IsFinite(tickVal) || tickVal <= 0)
+                return 0;
 
-            double commission = LastSymbol.IsMicro()
-                ? _settings.CommissionMicro
-                : _settings.CommissionMini;
-
-            // Loss includes slippage and round-trip commissions
-            double loss = (stopTicks + _settings.AverageSlippageTicks) * tickVal + (commission * 2);
-
-            return (stopTicks, tickVal, loss);
+            double commission = _settings.GetCommission(LastSymbol);
+            return RiskCalculator.CalculateCostPerContract(
+                stopTicks,
+                tickVal,
+                _settings.AverageSlippageTicks,
+                commission * 2
+            );
         }
 
-        // Simulate each shot losing from the clutch trigger to get zone boundaries.
-        // The zone current balance falls into tells us how many shots are left.
         private int GetClutchTrades(
             double currentBalance,
             double clutchTriggerBalance,
             double hardFloor,
-            double stopTicks,
-            double tickVal,
-            double lossPerContract
+            double costPerContract
         )
         {
             double zoneFloor = clutchTriggerBalance;
@@ -195,17 +183,13 @@ namespace AutoSizeStrategy
             {
                 double riskBase = zoneFloor - hardFloor;
 
-                // Let RiskCalculator determine the true size. If it's 0, this shot
-                // yields 0 contracts, meaning the floor won't move for this iteration.
                 int contracts = RiskCalculator.CalculatePositionSize(
                     riskBase * clutchSequence[i],
-                    stopTicks,
-                    tickVal
+                    costPerContract
                 );
 
-                zoneFloor -= contracts * lossPerContract;
+                zoneFloor -= contracts * costPerContract;
 
-                // Above the post-loss threshold: we're inside shot i's zone, it hasn't fired yet.
                 if (currentBalance > zoneFloor)
                     return clutchSequence.Length - i;
             }
@@ -217,15 +201,13 @@ namespace AutoSizeStrategy
             double startBalance,
             double endBalance,
             double hardFloor,
-            double stopTicks,
-            double tickVal,
-            double lossPerContract,
+            double costPerContract,
             params double[] riskLevels
         )
         {
             if (startBalance <= endBalance)
                 return 0;
-            if (stopTicks <= 0 || tickVal <= 0 || lossPerContract <= 0)
+            if (costPerContract <= 0)
                 return 0;
             if (riskLevels == null || riskLevels.Length == 0)
                 return 0;
@@ -253,12 +235,11 @@ namespace AutoSizeStrategy
                 double riskDollars = riskBase * currentRiskPct;
                 int contracts = RiskCalculator.CalculatePositionSize(
                     riskDollars,
-                    stopTicks,
-                    tickVal
+                    costPerContract
                 );
                 if (contracts == 0)
                     return trades;
-                currentBalance -= contracts * lossPerContract;
+                currentBalance -= contracts * costPerContract;
             }
 
             return MaxIterations;

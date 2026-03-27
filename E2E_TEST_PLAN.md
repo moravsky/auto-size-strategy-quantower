@@ -37,7 +37,9 @@ Replay and live connections behvior has subtle differences.
 
   * MNQ Tick Value = $0.50
   * 64 Ticks = $32.00 Risk per contract
-  * Risk Budget ($112.50) / $32.00 = 3.51
+  * Overhead (1 Slip Tick + $0.50 Round Trip Comm) = $1.00
+  * Total Cost Per Contract = $33.00
+  * Risk Budget ($112.50) / $33.00 = 3.40
   * **Base Target Size = 3 contracts**
 
 -----
@@ -51,8 +53,8 @@ Replay and live connections behvior has subtle differences.
 |<input type="checkbox"> | A1 | Limit order with standard SL | 1. Open MNQ chart.<br>2. Set Order Qty to `1`.<br>3. Enable SL and set to `64` ticks.<br>4. Click **Buy Bid**. | Order appears on the chart with Qty `3`.<br>**Log:** "Changed request ... quantity from 1 to 3." |
 |<input type="checkbox"> | A2 | Market order with standard SL | 1. Set Order Qty to `1`.<br>2. Enable SL to `64` ticks.<br>3. Click **Buy Market**. | Position opens with Qty `3`. |
 |<input type="checkbox"> | A3 | Stop order with standard SL | 1. Set Order Qty to `1`.<br>2. Enable SL to `64` ticks.<br>3. Place a Buy Stop. | Pending Stop Order appears with Qty `3`. |
-|<input type="checkbox"> | A4 | Large SL = Smaller Size | 1. Set Order Qty to `1`.<br>2. Change SL to `100` ticks.<br>3. Place a Buy Limit order. | Order Qty is `2`. *(112.50 / $50 risk = 2.25)*<br>**Log:** "quantity from 1 to 2." |
-|<input type="checkbox"> | A5 | Tight SL = Larger Size | 1. Set Order Qty to `1`.<br>2. Change SL to `10` ticks.<br>3. Place a Buy Limit order. | Order Qty is `22`. *(112.50 / $5 risk = 22.5)*<br>**Log:** "quantity from 1 to 22." |
+|<input type="checkbox"> | A4 | Large SL = Smaller Size | 1. Set Order Qty to `1`.<br>2. Change SL to `100` ticks.<br>3. Place a Buy Limit order. | Order Qty is `2`. *(112.50 / $51.00 total cost = 2.20)*<br>**Log:** "quantity from 1 to 2." |
+|<input type="checkbox"> | A5 | Tight SL = Larger Size | 1. Set Order Qty to `1`.<br>2. Change SL to `10` ticks.<br>3. Place a Buy Limit order. | Order Qty is `18`. *(112.50 / $6.00 total cost = 18.75)*<br>**Log:** "quantity from 1 to 18." |
 
 *(Clean up: Cancel all working orders and flatten positions before continuing).*
 
@@ -91,7 +93,7 @@ Replay and live connections behvior has subtle differences.
 
 | Done | \# | Test Case | Mechanical Steps | Expected Result |
 |------|---|-----------|------------------|-----------------|
-|<input type="checkbox"> | D1 | Expanding SL shrinks size | 1. Place Buy Limit Qty `1` (Sizes to `3`).<br>2. Right-click the order → **Modify**.<br>3. Change SL offset to `100` ticks.<br>4. Click **Apply**. | Order cancels and replaces with Qty `2`. *(112.50 / 50 = 2)*<br>**Log:** "resizing order ... via Cancel/Replace". |
+|<input type="checkbox"> | D1 | Expanding SL shrinks size | 1. Place Buy Limit Qty `1` (Sizes to `3`).<br>2. Right-click the order → **Modify**.<br>3. Change SL offset to `100` ticks.<br>4. Click **Apply**. | Order cancels and replaces with Qty `2`. *(112.50 / $51.00 = 2.2)*<br>**Log:** "resizing order ... via Cancel/Replace". |
 |<input type="checkbox"> | D2 | Moving Price only | 1. Left-click and drag the resting Buy Limit order down by 5 points on the chart.<br>2. Release mouse. | Order moves to new price. Qty remains `2`. Stop loss moves down with it to maintain 100-tick distance. |
 
 *(Clean up: Cancel working orders).*
@@ -100,13 +102,13 @@ Replay and live connections behvior has subtle differences.
 
 ### Test Suite F: Position-Aware Addition & Reversals
 
-*Pre-condition: Stop Strategy. Set Risk Percent to **5.0%** (Budget = $225). Base Capacity is now **7 contracts** ($225 / $32). Start Strategy.*
+*Pre-condition: Stop Strategy. Set Risk Percent to **5.0%** (Budget = $225). Base Capacity is now exactly **6 contracts** ($225 / $33.00). Start Strategy.*
 
 | Done | \# | Test Case | Mechanical Steps | Expected Result |
 |------|---|-----------|------------------|-----------------|
-|<input type="checkbox"> | F1 | Existing position reduces capacity | 1. Place Buy Market Qty `1` with 64-tick SL (Fills `7` contracts).<br>2. Close `4` contracts manually, leaving Net Position at Long `3`.<br>3. Place a new Buy Limit order Qty `1` with 64-tick SL. | Order is placed with Qty `4`. *(Capacity 7 - Existing 3 = 4)*.<br>**Log:** "Changed request ... from 1 to 4". |
-|<input type="checkbox"> | F2 | Hard stop at max capacity | 1. Flatten position and cancel any working orders.<br>2. Click **MKT** (Buy) Qty `1` with 64-tick SL (Fills `7` contracts).<br>3. Place a new Buy Limit order Qty `1` with 64-tick SL. | The second order flashes and is immediately cancelled. Qty = 0.<br>**Log:** "position already at target size (7)". |
-|<input type="checkbox"> |F3 | Position Flip / Reversal | 1. Ensure Net Position is Long 7. 2. Set Order Quantity to 100. 3. Click MKT (Sell) with 64-tick SL. | Observe: Sell Market order is safely clamped/sized to 14 contracts (7 to flatten + 7 max new short exposure). Net position instantly becomes Short 7. |
+|<input type="checkbox"> | F1 | Existing position reduces capacity | 1. Place Buy Market Qty `1` with 64-tick SL (Fills `6` contracts).<br>2. Close `3` contracts manually, leaving Net Position at Long `3`.<br>3. Place a new Buy Limit order Qty `1` with 64-tick SL. | Order is placed with Qty `3`. *(Capacity 6 - Existing 3 = 3)*.<br>**Log:** "Changed request ... from 1 to 3". |
+|<input type="checkbox"> | F2 | Hard stop at max capacity | 1. Flatten position and cancel any working orders.<br>2. Click **MKT** (Buy) Qty `1` with 64-tick SL (Fills `6` contracts).<br>3. Place a new Buy Limit order Qty `1` with 64-tick SL. | The second order flashes and is immediately cancelled. Qty = 0.<br>**Log:** "position already at target size (6)". |
+|<input type="checkbox"> |F3 | Position Flip / Reversal | 1. Ensure Net Position is Long `6`.<br>2. Set Order Quantity to `100`.<br>3. Click **MKT** (Sell) with 64-tick SL. | Observe: Sell Market order is safely clamped/sized to `12` contracts *(6 to flatten + 6 max new short exposure)*.<br>Net position instantly becomes Short 6. |
 
 *(Clean up: Flatten positions).*
 
@@ -114,12 +116,12 @@ Replay and live connections behvior has subtle differences.
 
 ### Test Suite G: Max Contracts Cap
 
-*Pre-condition: Net Position is 0. Stop Strategy. Set Risk Percent to **10.0%** (Base Size is **14 contracts**). Set **Max Contracts (Micro)** to **5**. Start Strategy.*
+*Pre-condition: Net Position is 0. Stop Strategy. Set Risk Percent to **10.0%** (Base Size is **13 contracts** - $450/$33). Set **Max Contracts (Micro)** to **5**. Start Strategy.*
 
 | Done | \# | Test Case | Mechanical Steps | Expected Result |
 |------|---|-----------|------------------|-----------------|
-|<input type="checkbox"> | G1 | Cap clamps calculated size | 1. Place Buy Limit Qty `1` with 64-tick SL. | Order placed for Qty `5` (not 14).<br>**Log:** "Capping calculatedSize from 14 to 5". |
-|<input type="checkbox"> | G2 | Micro / Mini independence | 1. Open chart for standard **NQ**.<br>2. Place Buy Limit Qty `1` with `20`-tick SL. | Order placed for Qty `4`. *(Risk $450 / ($5 \* 20 ticks = $100) = 4)*. It is NOT capped by the Micro setting.<br>**Log:** "Changed request ... from 1 to 4". |
+|<input type="checkbox"> | G1 | Cap clamps calculated size | 1. Place Buy Limit Qty `1` with 64-tick SL. | Order placed for Qty `5` (not 13).<br>**Log:** "Capping calculatedSize from 13 to 5". |
+|<input type="checkbox"> | G2 | Micro / Mini independence | 1. Open chart for standard **NQ**.<br>2. Place Buy Limit Qty `1` with `20`-tick SL. | Order placed for Qty `4`.<br>*(Risk $450 / ($100 stop + $5 slip + $5 comm = $110 cost) = 4.09)*.<br>It is NOT capped by the Micro setting.<br>**Log:** "Changed request ... from 1 to 4". |
 
 *(Clean up: Cancel orders, reset Max Contracts Micro to 0, reset Risk to 2.5%).*
 
@@ -130,11 +132,11 @@ Replay and live connections behvior has subtle differences.
 
 | Done | # | Test Case | Mechanical Steps | Expected Result |
 |------|---|-----------|------------------|-----------------|
-| <input type="checkbox"> | H1 | Single Protected Position | 1. Place Buy Limit Qty `1` with 64-tick SL (Sizes to `3`).<br>2. Allow order to fill.<br>3. Open Strategy Metrics panel. | **Observe Absolute VaR:** Exactly `$98.25`. *(3 qty * 64 ticks * $0.50 tick value = $96.00 + $1.50 slip + $0.75 comms)*.<br>**Observe Relative VaR:** Exactly `2.18%`. *(98.25 / 4500)* |
-| <input type="checkbox"> | H2 | Modified SL updates VaR | 1. Drag the resting SL line on the chart down from 64 ticks to 100 ticks. | **Observe Absolute VaR:** Jumps to `$152.25` within 1 second. *(3 * 100 * $0.50 = $150.00 + $1.50 slip + $0.75 comms)*. |
-| <input type="checkbox"> | H3 | Partial Protection Spike | 1. Right-click the resting SL line on the chart → **Modify**.<br>2. Change the order Quantity from `3` to `2` and click **Apply**.<br>*(This leaves 1 position contract completely unprotected).* | **Observe Absolute VaR:** Spikes instantly to `$4500.00` (Max Exposure).<br>**Observe Relative VaR:** Spikes to `100%`. |
-| <input type="checkbox"> | H4 | Multiple Stops (Blended) | 1. With the position of `3` still open, right-click the chart exactly 64 ticks (16 points) below the entry price.<br>2. Place a **Sell Stop** order for Qty `1`.<br>*(You now have 2 contracts protected at 100 ticks, and 1 contract protected at 64 ticks).* | **Observe Absolute VaR:** Drops to exactly `$134.25`.<br>*(Qty 2 @ 100 ticks + $1 slip + $0.50 comm = $101.50)*<br>*(Qty 1 @ 64 ticks + $0.50 slip + $0.25 comm = $32.75)*<br>**Observe Relative VaR:** Exactly `2.98%`. *(134.25 / 4500)* |
-| <input type="checkbox"> | H5 | Unprotected Spike | 1. Flatten position.<br>2. Stop Strategy, set Missing Stop Loss Action to **Ignore**. Start Strategy.<br>3. Click **NO SL** in Order Entry.<br>4. Click **MKT** (Buy) Qty `1`. | **Observe Absolute VaR:** Spikes instantly to `$4500.00` (Max Exposure).<br>**Observe Relative VaR:** Spikes to `100%`. |
+| <input type="checkbox"> | H1 | Single Protected Position | 1. Place Buy Limit Qty `1` with 64-tick SL (Sizes to `3`).<br>2. Allow order to fill.<br>3. Open Strategy Metrics panel. | **Absolute VaR:** Exactly `$98.25`. *(3 qty * 64 ticks * $0.50 tick value = $96.00 + $1.50 slip + $0.75 comms)*.<br>**Relative VaR:** Exactly `2.18%`. *(98.25 / 4500)* |
+| <input type="checkbox"> | H2 | Modified SL updates VaR | 1. Drag the resting SL line on the chart down from 64 ticks to 100 ticks. | **Absolute VaR:** Jumps to `$152.25` within 1 second. *(3 * 100 * $0.50 = $150.00 + $1.50 slip + $0.75 comms)*. |
+| <input type="checkbox"> | H3 | Partial Protection Spike | 1. Right-click the resting SL line on the chart → **Modify**.<br>2. Change the order Quantity from `3` to `2` and click **Apply**.<br>*(This leaves 1 position contract completely unprotected).* | **Absolute VaR:** Spikes instantly to `$4500.00` (Max Exposure).<br>**Relative VaR:** Spikes to `100%`. |
+| <input type="checkbox"> | H4 | Multiple Stops (Blended) | 1. With the position of `3` still open, right-click the chart exactly 64 ticks (16 points) below the entry price.<br>2. Place a **Sell Stop** order for Qty `1`.<br>*(You now have 2 contracts protected at 100 ticks, and 1 contract protected at 64 ticks).* | **Absolute VaR:** Drops to exactly `$134.25`.<br>*(Qty 2 @ 100 ticks + $1 slip + $0.50 comm = $101.50)*<br>*(Qty 1 @ 64 ticks + $0.50 slip + $0.25 comm = $32.75)*<br>**Relative VaR:** Exactly `2.98%`. *(134.25 / 4500)* |
+| <input type="checkbox"> | H5 | Unprotected Spike | 1. Flatten position.<br>2. Stop Strategy, set Missing Stop Loss Action to **Ignore**. Start Strategy.<br>3. Click **NO SL** in Order Entry.<br>4. Click **MKT** (Buy) Qty `1`. | **Absolute VaR:** Spikes instantly to `$4500.00` (Max Exposure).<br>**Relative VaR:** Spikes to `100%`. |
 
 *(Clean up: Flatten positions).*
 
@@ -144,7 +146,8 @@ Replay and live connections behvior has subtle differences.
 
 | Done | \# | Test Case | Mechanical Steps | Expected Result |
 |------|---|-----------|------------------|-----------------|
-|<input type="checkbox"> | M1 | Risk too big for 1 contract | 1. Change Risk Percent to `0.1%` (Budget = $4.50).<br>2. Place Buy Limit Qty `1` with `64`-tick SL (Risk = $32). | Order flashes and cancels.<br>**Log:** "Risk too big even for 1 contract". |
+|<input type="checkbox"> | M1 | Risk too big for 1 contract | 1. Change Risk Percent to `0.1%` (Budget = $4.50).<br>2. Place Buy Limit Qty `1` with `64`-tick SL (Risk = $33). | Order flashes and cancels.<br>**Log:** "Risk too big even for 1 contract". |
+|<input type="checkbox"> | M3 | Floor Boundary (3 to 2) | 1. Set Risk Percent to `2.5%` (Budget = $112.50).<br>2. Place a limit order with exactly **`73`** ticks SL. Note Quantity.<br>3. Place a limit order with exactly **`74`** ticks SL. Note Quantity. | Verify sizing by manual calculation |
 
 -----
 
