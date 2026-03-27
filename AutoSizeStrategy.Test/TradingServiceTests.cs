@@ -271,6 +271,58 @@ namespace AutoSizeStrategy.Test
             );
         }
 
+        [Theory]
+        [InlineData(5.0, Side.Buy, 5.0)]
+        [InlineData(10.0, Side.Sell, -10.0)]
+        [InlineData(0.0, Side.Buy, 0.0)]
+        [InlineData(0.0, Side.Sell, 0.0)]
+        public void GetNetPositionQuantity_ReturnsCorrectNetPosition(double quantity, Side side, double expectedNetPos)
+        {
+            var accMock = new Mock<IAccount>();
+            accMock.SetupGet(a => a.Id).Returns("acc1");
+
+            var symMock = new Mock<ISymbol>();
+            symMock.SetupGet(s => s.Id).Returns("sym1");
+
+            var posMock = new Mock<IPosition>();
+            posMock.SetupGet(p => p.Account).Returns(accMock.Object);
+            posMock.SetupGet(p => p.Symbol).Returns(symMock.Object);
+            posMock.SetupGet(p => p.Side).Returns(side);
+            posMock.SetupGet(p => p.Quantity).Returns(quantity);
+
+            // Local instance with our mocked position
+            var localService = new TradingService(
+                _loggerMock.Object,
+                () => [posMock.Object],
+                () => []
+            );
+
+            var netPos = localService.GetNetPositionQuantity(accMock.Object, symMock.Object);
+
+            Assert.Equal(expectedNetPos, netPos);
+        }
+
+        [Fact]
+        public void GetNetPositionQuantity_NoPosition_ReturnsZero()
+        {
+            var accMock = new Mock<IAccount>();
+            accMock.SetupGet(a => a.Id).Returns("acc1");
+
+            var symMock = new Mock<ISymbol>();
+            symMock.SetupGet(s => s.Id).Returns("sym1");
+
+            // Local instance with an EMPTY position list
+            var localService = new TradingService(
+                _loggerMock.Object,
+                () => [],
+                () => []
+            );
+
+            var netPos = localService.GetNetPositionQuantity(accMock.Object, symMock.Object);
+
+            Assert.Equal(0.0, netPos);
+        }
+
         public void Dispose() => _service.Dispose();
     }
 }

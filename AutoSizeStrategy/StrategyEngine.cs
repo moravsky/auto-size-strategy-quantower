@@ -47,7 +47,7 @@ namespace AutoSizeStrategy
                 return;
             }
 
-            double netPosition = context.GetNetPositionQuantity(
+            double netPosition = context.TradingService.GetNetPositionQuantity(
                 orderRequestParameters.Account,
                 orderRequestParameters.Symbol
             );

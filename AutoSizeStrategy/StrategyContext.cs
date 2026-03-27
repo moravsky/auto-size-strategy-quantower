@@ -1,7 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
 {
@@ -40,41 +37,16 @@ namespace AutoSizeStrategy
         IStrategySettings Settings { get; }
         ITradingService TradingService { get; }
         Metrics Metrics { get; }
-        double GetNetPositionQuantity(IAccount account, ISymbol symbol);
     }
 
     public record StrategyContext(
         IStrategyLogger Logger,
         IStrategySettings Settings,
         ITradingService TradingService,
-        Metrics Metrics,
-        Func<IEnumerable<IPosition>> PositionProvider
+        Metrics Metrics
     ) : IStrategyContext
     {
         private bool _disposed;
-
-        // TODO: V3: Introduce DI container for pluggable logic
-        public StrategyContext(AutoSizeStrategy autoSizeStrategy, Metrics metrics)
-            : this(
-                Logger: autoSizeStrategy,
-                Settings: autoSizeStrategy,
-                TradingService: new TradingService(autoSizeStrategy),
-                Metrics: metrics,
-                PositionProvider: () => Core.Instance.Positions.Select(p => new PositionWrapper(p))
-            )
-        {
-        }
-
-        public double GetNetPositionQuantity(IAccount account, ISymbol symbol)
-        {
-            var position = PositionProvider()
-                .FirstOrDefault(p => p.Account.Id == account.Id && p.Symbol.Id == symbol.Id);
-
-            if (position == null)
-                return 0;
-
-            return position.Side == Side.Buy ? position.Quantity : -position.Quantity;
-        }
 
         public void Dispose()
         {

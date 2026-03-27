@@ -25,7 +25,7 @@ namespace AutoSizeStrategy.Test
             _contextMock.SetupGet(c => c.Logger).Returns(_loggerMock.Object);
             _contextMock.SetupGet(c => c.Settings).Returns(_settingsMock.Object);
             _contextMock.SetupGet(c => c.TradingService).Returns(_serviceMock.Object);
-            _contextMock
+            _serviceMock
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(0);
 
@@ -212,7 +212,7 @@ namespace AutoSizeStrategy.Test
         public void ProcessRequest_PositionSizing_CalculatesCorrectQuantity(
             double netPosition, Side side, double requestedQty, double stopLossTicks, double expectedQty)
         {
-            _contextMock
+            _serviceMock
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(netPosition);
 
@@ -578,7 +578,7 @@ namespace AutoSizeStrategy.Test
                 .Returns(symbolId.StartsWith("M") ? 0 : sizeCap);
             _symbolMock.SetupGet(s => s.Id).Returns(symbolId);
 
-            _contextMock
+            _serviceMock
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
                 .Returns(netPosition);
 

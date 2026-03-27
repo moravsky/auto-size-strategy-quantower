@@ -55,14 +55,15 @@ namespace AutoSizeStrategy
             }
 
             _shutdownCts = new CancellationTokenSource();
-            this._metrics = new Metrics(this,
-                    account => Core.Instance.Positions
-                        .Where(p => p.Account.Id == account.Id)
-                        .Select(p => new PositionWrapper(p)),
-                    account => Core.Instance.Orders
-                        .Where(o => o.Account.Id == account.Id && o.Status == OrderStatus.Opened)
-                        .Select(o => new OrderWrapper(o)));
-            var context = new StrategyContext(this, this._metrics);
+
+            var tradingService = new TradingService(
+                this,
+                () => Core.Instance.Positions.Select(p => new PositionWrapper(p)),
+                () => Core.Instance.Orders.Select(o => new OrderWrapper(o))
+            );
+
+            this._metrics = new Metrics(this, tradingService);
+            var context = new StrategyContext(this, this, tradingService, this._metrics);
             this._strategyEngine = new StrategyEngine(context);
 
             Core.NewRequest += this.CoreNewRequest;
@@ -72,7 +73,7 @@ namespace AutoSizeStrategy
             UpdateMetrics();
             StartHeartbeat(_shutdownCts.Token);
         }
-
+        
         protected override void OnCreated()
         {
             base.OnCreated();

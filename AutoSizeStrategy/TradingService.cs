@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
@@ -7,12 +9,15 @@ namespace AutoSizeStrategy
 {
     public interface ITradingService : IDisposable
     {
-        // TODO: Replace bool with rich result object
         bool Cancel(string orderId);
         bool Cancel(IOrder order, bool useLeadingJitter = false);
         bool Place(IPlaceOrderRequestParameters parameters, bool useLeadingJitter = false);
         bool CancelReplace(string originalOrderId, IPlaceOrderRequestParameters newParams);
         bool CancelReplace(IOrder originalOrder, IPlaceOrderRequestParameters newParams);
+
+        IEnumerable<IPosition> GetPositions(IAccount account);
+        IEnumerable<IOrder> GetWorkingOrders(IAccount account);
+        double GetNetPositionQuantity(IAccount account, ISymbol symbol);
 
         // Hooks for platform events
         void ReportCancelledOrder(string orderId);
@@ -41,11 +46,15 @@ namespace AutoSizeStrategy
 
     public class TradingService(
         IStrategyLogger logger,
+        Func<IEnumerable<IPosition>> positionProvider,
+        Func<IEnumerable<IOrder>> orderProvider,
         TradingServiceSettings tradingServiceSettings = null
     ) : ITradingService
     {
         public TradingService(IStrategyLogger logger)
-            : this(logger, new TradingServiceSettings()) { }
+            : this(logger, () => [], () => [], new TradingServiceSettings())
+        {
+        }
 
         private readonly CancellationTokenSource _cts = new();
         private readonly TrackingSet<string> _pendingCancels = new();
@@ -118,6 +127,7 @@ namespace AutoSizeStrategy
             {
                 return false;
             }
+
             return CancelReplace(order, newParams);
         }
 
@@ -211,10 +221,28 @@ namespace AutoSizeStrategy
                     retryDelayMs *= 2;
                 }
             }
+
             logger.LogError(
                 $"{name} {id} timed out after {tradingServiceSettings.MaxRetries} retries"
             );
             return TradingOperationResult.CreateError(67, $"{name} {id} timed out");
+        }
+
+        public IEnumerable<IPosition> GetPositions(IAccount account) =>
+            positionProvider().Where(p => p.Account.Id == account.Id);
+
+        public IEnumerable<IOrder> GetWorkingOrders(IAccount account) =>
+            orderProvider().Where(o => o.Account.Id == account.Id && o.Status == OrderStatus.Opened);
+
+        public double GetNetPositionQuantity(IAccount account, ISymbol symbol)
+        {
+            var position = GetPositions(account)
+                .FirstOrDefault(p => p.Symbol.Id == symbol.Id);
+
+            if (position == null)
+                return 0;
+
+            return position.Side == Side.Buy ? position.Quantity : -position.Quantity;
         }
 
         public void ReportCancelledOrder(string orderId) => _pendingCancels.TryRemove(orderId);

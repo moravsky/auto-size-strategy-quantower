@@ -57,11 +57,13 @@ namespace AutoSizeStrategy.Test
             List<IPosition>? positions = null,
             List<IOrder>? orders = null)
         {
-            var metrics = new Metrics(
-                _settingsMock.Object,
-                positions != null ? _ => positions : null,
-                orders != null ? _ => orders : null
-            );
+            var tradingServiceMock = new Mock<ITradingService>();
+            tradingServiceMock.Setup(ts => ts.GetPositions(It.IsAny<IAccount>()))
+                .Returns(positions ?? Enumerable.Empty<IPosition>());
+            tradingServiceMock.Setup(ts => ts.GetWorkingOrders(It.IsAny<IAccount>()))
+                .Returns(orders ?? Enumerable.Empty<IOrder>());
+
+            var metrics = new Metrics(_settingsMock.Object, tradingServiceMock.Object);
 
             if (symbol != null)
                 metrics.LastSymbol = symbol;

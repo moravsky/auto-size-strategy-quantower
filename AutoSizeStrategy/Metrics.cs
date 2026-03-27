@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using TradingPlatform.BusinessLayer;
 
@@ -15,20 +14,13 @@ namespace AutoSizeStrategy
 
     public class Metrics(
         IStrategySettings settings,
-        Func<IAccount, IEnumerable<IPosition>> positionProvider = null,
-        Func<IAccount, IEnumerable<IOrder>> workingOrderProvider = null)
+        ITradingService tradingService = null)
     {
         private const int MaxIterations = 10_000;
         private const double MinRiskPercentage = .05;
 
         private readonly IStrategySettings _settings =
             settings ?? throw new ArgumentNullException(nameof(settings));
-
-        private readonly Func<IAccount, IEnumerable<IPosition>> _positionProvider =
-            positionProvider ?? (_ => []);
-
-        private readonly Func<IAccount, IEnumerable<IOrder>> _workingOrderProvider =
-            workingOrderProvider ?? (_ => []);
 
         public ISymbol LastSymbol { get; set; } = new DefaultSymbol();
         public double LastStopDistanceTicks { get; set; } = settings.MinimumStopLossTicks;
@@ -72,7 +64,6 @@ namespace AutoSizeStrategy
                 lossPerContract
             );
 
-
             return new AccountMetrics(
                 RiskCapital: availableDrawdown,
                 TradesToClutchMode: tradesToClutch,
@@ -98,8 +89,9 @@ namespace AutoSizeStrategy
 
             double maxExposure = GetMaxExposure(account);
             double totalAbsolute = 0;
-            var positions = _positionProvider(account).ToList();
-            var workingOrders = _workingOrderProvider(account).ToList();
+
+            var positions = tradingService?.GetPositions(account).ToList() ?? [];
+            var workingOrders = tradingService?.GetWorkingOrders(account).ToList() ?? [];
 
             foreach (var pos in positions)
             {
