@@ -210,6 +210,7 @@ namespace AutoSizeStrategy.Test
         public static TheoryData<double, double, TestStopOrder[], double, double> ValueAtRiskScenarios => new()
         {
             // [PositionQty, SlippageTicks, Stops, ExpectedAbsVaR, ExpectedRelVaR]
+            // Note: MNQ Exit Commission is $0.25 per contract.
 
             // 1. No Positions -> 0 VaR
             { 0, 0.0, [], 0.0, 0.0 },
@@ -217,17 +218,22 @@ namespace AutoSizeStrategy.Test
             // 2. Unprotected Position -> Max Exposure (150K balance - 145.5K threshold = 4500)
             { 5, 0.0, [], 4500.0, 100.0 },
 
-            // 3. Stop Order: Calculates distance + slippage
-            // Dist = 20 ticks * $5 * 2 qty = $200. Slippage = 2 ticks * $5 * 2 qty = $20. Total = $220.
-            { 2, 2.0, [new(OrderType.Stop, 4995.0, 0.0, 2)], 220.0, 220.0 / 45.0 },
+            // 3. Stop Order: Calculates distance + slippage + exit commission
+            // Dist: 20 ticks * $5 * 2 qty = $200. Slippage: 2 ticks * $5 * 2 = $20. Comm: $0.25 * 2 = $0.50. Total = $220.50.
+            { 2, 2.0, [new(OrderType.Stop, 4995.0, 0.0, 2)], 220.50, 220.50 / 45.0 },
 
             // 4. StopLimit Order: Uses Limit Price for distance
-            // Limit is 40 ticks away. 40 * $5 * 2 = $400.
-            { 2, 0.0, [new(OrderType.StopLimit, 4995.0, 4990.0, 2)], 400.0, 400.0 / 45.0 },
+            // Dist: 40 ticks * $5 * 2 qty = $400. Comm: $0.25 * 2 = $0.50. Total = $400.50.
+            { 2, 0.0, [new(OrderType.StopLimit, 4995.0, 4990.0, 2)], 400.50, 400.50 / 45.0 },
 
             // 5. Multiple Stop Orders: Calculates blended distance
-            // Stop 1 covers 1 qty 20 ticks away ($100). Stop 2 covers 2 qty 40 ticks away ($400). Total = $500.
-            { 3, 0.0, [new(OrderType.Stop, 4995.0, 0.0, 1), new(OrderType.Stop, 4990.0, 0.0, 2)], 500.0, 500.0 / 45.0 },
+            // Stop 1: 1 qty 20 ticks away ($100) + $0.25 comm = $100.25. 
+            // Stop 2: 2 qty 40 ticks away ($400) + $0.50 comm = $400.50. 
+            // Total = $500.75.
+            {
+                3, 0.0, [new(OrderType.Stop, 4995.0, 0.0, 1), new(OrderType.Stop, 4990.0, 0.0, 2)], 500.75,
+                500.75 / 45.0
+            },
 
             // 6. Partial Protection: Returns Max Exposure instantly
             // Pos qty = 3, Stop qty = 1. 2 contracts unprotected -> Max Exposure ($4500).

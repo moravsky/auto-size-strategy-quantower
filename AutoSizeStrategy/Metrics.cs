@@ -136,7 +136,12 @@ namespace AutoSizeStrategy
                     double protectedQty = Math.Min(stop.TotalQuantity, unprotectedQty);
                     double slippageCost = _settings.AverageSlippageTicks * tickValue * protectedQty;
 
-                    totalAbsolute += (distanceTicks * tickValue * protectedQty) + slippageCost;
+                    double commissionPerContract = pos.Symbol.IsMicro()
+                        ? _settings.CommissionMicro
+                        : _settings.CommissionMini;
+                    double commissionCost = commissionPerContract * protectedQty;
+
+                    totalAbsolute += (distanceTicks * tickValue * protectedQty) + slippageCost + commissionCost;
                     unprotectedQty -= protectedQty;
                 }
 

@@ -130,13 +130,13 @@ Replay and live connections behvior has subtle differences.
 
 | Done | # | Test Case | Mechanical Steps | Expected Result |
 |------|---|-----------|------------------|-----------------|
-| <input type="checkbox"> | H1 | Single Protected Position | 1. Place Buy Limit Qty `1` with 64-tick SL (Sizes to `3`).<br>2. Allow order to fill.<br>3. Open Strategy Metrics panel. | **Observe Absolute VaR:** Exactly `$49.50`. *(3 qty * 64 ticks * $0.50 tick value = $48.00 + $1.50 slippage)*.<br>**Observe Relative VaR:** Exactly `1.10%`. *(49.50 / 4500)* |
-| <input type="checkbox"> | H2 | Modified SL updates VaR | 1. Drag the resting SL line on the chart down from 64 ticks to 100 ticks. | **Observe Absolute VaR:** Jumps to `$76.50` within 1 second. *(3 * 100 * 0.50 + 1.50 slippage)*. |
+| <input type="checkbox"> | H1 | Single Protected Position | 1. Place Buy Limit Qty `1` with 64-tick SL (Sizes to `3`).<br>2. Allow order to fill.<br>3. Open Strategy Metrics panel. | **Observe Absolute VaR:** Exactly `$98.25`. *(3 qty * 64 ticks * $0.50 tick value = $96.00 + $1.50 slip + $0.75 comms)*.<br>**Observe Relative VaR:** Exactly `2.18%`. *(98.25 / 4500)* |
+| <input type="checkbox"> | H2 | Modified SL updates VaR | 1. Drag the resting SL line on the chart down from 64 ticks to 100 ticks. | **Observe Absolute VaR:** Jumps to `$152.25` within 1 second. *(3 * 100 * $0.50 = $150.00 + $1.50 slip + $0.75 comms)*. |
 | <input type="checkbox"> | H3 | Partial Protection Spike | 1. Right-click the resting SL line on the chart → **Modify**.<br>2. Change the order Quantity from `3` to `2` and click **Apply**.<br>*(This leaves 1 position contract completely unprotected).* | **Observe Absolute VaR:** Spikes instantly to `$4500.00` (Max Exposure).<br>**Observe Relative VaR:** Spikes to `100%`. |
-| <input type="checkbox"> | H4 | Multiple Stops (Blended) | 1. With the position of `3` still open, right-click the chart exactly 64 ticks (16 points) below the entry price.<br>2. Place a **Sell Stop** order for Qty `1`.<br>*(You now have 2 contracts protected at 100 ticks, and 1 contract protected at 64 ticks).* | **Observe Absolute VaR:** Drops to exactly `$117.50`.<br>*(Qty 2 @ 100 ticks = $51.00)*<br>*(Qty 1 @ 64 ticks = $16.50)*<br>**Observe Relative VaR:** Exactly `1.50%`. *(67.50 / 4500)* |
+| <input type="checkbox"> | H4 | Multiple Stops (Blended) | 1. With the position of `3` still open, right-click the chart exactly 64 ticks (16 points) below the entry price.<br>2. Place a **Sell Stop** order for Qty `1`.<br>*(You now have 2 contracts protected at 100 ticks, and 1 contract protected at 64 ticks).* | **Observe Absolute VaR:** Drops to exactly `$134.25`.<br>*(Qty 2 @ 100 ticks + $1 slip + $0.50 comm = $101.50)*<br>*(Qty 1 @ 64 ticks + $0.50 slip + $0.25 comm = $32.75)*<br>**Observe Relative VaR:** Exactly `2.98%`. *(134.25 / 4500)* |
 | <input type="checkbox"> | H5 | Unprotected Spike | 1. Flatten position.<br>2. Stop Strategy, set Missing Stop Loss Action to **Ignore**. Start Strategy.<br>3. Click **NO SL** in Order Entry.<br>4. Click **MKT** (Buy) Qty `1`. | **Observe Absolute VaR:** Spikes instantly to `$4500.00` (Max Exposure).<br>**Observe Relative VaR:** Spikes to `100%`. |
 
-*(Clean up: Flatten positions. Set Missing Stop Loss Action back to Reject).*
+*(Clean up: Flatten positions).*
 
 -----
 
