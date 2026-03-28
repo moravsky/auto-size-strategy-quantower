@@ -106,7 +106,7 @@ namespace AutoSizeStrategy
                 context.Settings.MinAccountBalanceOverride
             );
             context.Logger.LogInfo(
-                $"Account balance:{account.Balance} riskCapital: {riskCapital} position risk:{positionRisk}"
+                $"Account balance:{account.Balance} risk capital: {riskCapital} position risk:{positionRisk}"
             );
 
             var symbol = orderRequestParameters.Symbol;
@@ -141,6 +141,8 @@ namespace AutoSizeStrategy
                 slippageTicks,
                 roundTripCommission
             );
+            context.Logger.LogInfo(
+                $"[{symbol.Id}] Cost/contract: {costPerContract:F2} ({stopDistanceTicks}T stop + {slippageTicks}T slip + ${roundTripCommission:F2} comm)");
 
             int calculatedSize = RiskCalculator.CalculatePositionSize(
                 positionRisk,
