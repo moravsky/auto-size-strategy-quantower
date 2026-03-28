@@ -13,8 +13,8 @@ namespace AutoSizeStrategy.Test
             set.TryTrack("shortLived");
             Assert.True(set.Contains("shortLived"));
 
-            // Wait for expiration + cleanup cycle
-            await Task.Delay(200);
+            bool removed = await set.WaitAsync("shortLived", timeoutMs: 2000);
+            Assert.True(removed, "The expired item should have been cleaned up");
 
             Assert.False(set.Contains("shortLived"));
             Assert.Equal(0, set.Count);
@@ -43,7 +43,8 @@ namespace AutoSizeStrategy.Test
             set.TryTrack("expired", DateTime.UtcNow.AddMilliseconds(50));
             set.TryTrack("valid", DateTime.UtcNow.AddSeconds(10));
 
-            await Task.Delay(150);
+            bool removed = await set.WaitAsync("expired", timeoutMs: 2000);
+            Assert.True(removed, "The expired item should have been cleaned up");
 
             Assert.False(set.Contains("expired"));
             Assert.True(set.Contains("valid"));
