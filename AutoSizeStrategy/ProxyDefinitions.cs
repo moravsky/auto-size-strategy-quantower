@@ -97,6 +97,7 @@ namespace AutoSizeStrategy
     public interface ISymbol
     {
         string Id { get; }
+        string Name { get; }
         double Last { get; }
         double TickSize { get; }
         double GetTickCost(double price);
@@ -106,6 +107,7 @@ namespace AutoSizeStrategy
     {
         public Symbol Inner => symbol;
         public string Id => symbol.Id;
+        public string Name => symbol.Name;
         public double TickSize => symbol.TickSize;
         public double Last => symbol.Last;
 
@@ -115,7 +117,8 @@ namespace AutoSizeStrategy
     // Default symbol for metrics before first order. MNQ values.
     public class DefaultSymbol : ISymbol
     {
-        public string Id => "MNQ";
+        public string Id => "MNQ@CME";
+        public string Name => "MNQ";
         public double Last => 20_000;
         public double TickSize => 0.25;
 

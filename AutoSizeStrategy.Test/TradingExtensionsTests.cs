@@ -338,16 +338,16 @@ namespace AutoSizeStrategy.Test
         [InlineData("MES", true)]
         [InlineData("MGC", true)]
         [InlineData("MYM", true)]
-        [InlineData("M2K", false)]
+        [InlineData("M2K", true)]
         [InlineData("NQ", false)]
         [InlineData("ES", false)]
         [InlineData("GC", false)]
         [InlineData("CL", false)]
         [InlineData("6E", false)]
-        public void IsMicro_BySymbolName(string symbolId, bool expected)
+        public void IsMicro_BySymbolName(string symbolName, bool expected)
         {
             var symbolMock = new Mock<ISymbol>();
-            symbolMock.SetupGet(s => s.Id).Returns(symbolId);
+            symbolMock.SetupGet(s => s.Name).Returns(symbolName);
             Assert.Equal(expected, symbolMock.Object.IsMicro());
         }
 
@@ -358,10 +358,10 @@ namespace AutoSizeStrategy.Test
         [InlineData("NQ", 2.50)]
         [InlineData("GC", 2.50)]
         [InlineData("ES", 2.50)]
-        public void GetCommission_ReturnsCorrectRate(string symbolId, double expected)
+        public void GetCommission_ReturnsCorrectRate(string symbolName, double expected)
         {
             var symbolMock = new Mock<ISymbol>();
-            symbolMock.SetupGet(s => s.Id).Returns(symbolId);
+            symbolMock.SetupGet(s => s.Name).Returns(symbolName);
 
             var settingsMock = new Mock<IStrategySettings>();
             settingsMock.SetupGet(s => s.CommissionMicro).Returns(0.25);

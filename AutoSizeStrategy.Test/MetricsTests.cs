@@ -31,7 +31,8 @@ namespace AutoSizeStrategy.Test
 
             _settingsMock.SetupGet(s => s.CurrentAccount).Returns(_accountMock.Object);
 
-            _symbolMock.SetupGet(s => s.Id).Returns("MNQ");
+            _symbolMock.SetupGet(s => s.Id).Returns("MNQ@CME");
+            _symbolMock.SetupGet(s => s.Name).Returns("MNQ");
             _symbolMock.SetupGet(s => s.Last).Returns(18000);
             _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(0.50);
 

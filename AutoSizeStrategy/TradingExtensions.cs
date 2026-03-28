@@ -15,13 +15,12 @@ namespace AutoSizeStrategy
         public static partial Regex EndOfDayAccountPattern();
 
         // Micro contracts: MNQ, MES, MGC, MYM, M2K, etc.
-        // All start with "M" followed by uppercase letter.
-        [GeneratedRegex("^M[A-Z]")]
+        [GeneratedRegex("^(MES|MNQ|MYM|M2K|MGC|MHG|MCL|M6E|M6A|M6B|MSF|MJY|MBT|MET|MSOL|MXRP|SIL|PAM)$")]
         private static partial Regex MicroContractPattern();
 
         public static bool IsMicro(this ISymbol symbol)
         {
-            return MicroContractPattern().IsMatch(symbol.Id);
+            return MicroContractPattern().IsMatch(symbol.Name);
         }
 
         public static double GetCommission(this IStrategySettings settings, ISymbol symbol) =>

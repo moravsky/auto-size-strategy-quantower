@@ -116,7 +116,7 @@ namespace AutoSizeStrategy
             if (!double.IsFinite(tickValue) || tickValue <= 0)
             {
                 context.Logger.LogError(
-                    $"Symbol {symbol.Id} tick value unavailable ({tickValue}), cancelling request {orderRequestParameters.RequestId}"
+                    $"Symbol {symbol.Name} tick value unavailable ({tickValue}), cancelling request {orderRequestParameters.RequestId}"
                 );
                 orderRequestParameters.Quantity = 0;
                 return;
@@ -142,7 +142,7 @@ namespace AutoSizeStrategy
                 roundTripCommission
             );
             context.Logger.LogInfo(
-                $"[{symbol.Id}] Cost/contract: {costPerContract:F2} ({stopDistanceTicks}T stop + {slippageTicks}T slip + ${roundTripCommission:F2} comm)");
+                $"[{symbol.Name}] cost per contract: {costPerContract:F2} ({stopDistanceTicks}T stop + {slippageTicks}T slip + ${roundTripCommission:F2} comm)");
 
             int calculatedSize = RiskCalculator.CalculatePositionSize(
                 positionRisk,

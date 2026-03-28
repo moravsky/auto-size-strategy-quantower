@@ -50,7 +50,8 @@ namespace AutoSizeStrategy.Test
             _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
 
             // Default Symbol (MES-like)
-            _symbolMock.SetupGet(s => s.Id).Returns("MES");
+            _symbolMock.SetupGet(s => s.Id).Returns("MES@CME");
+            _symbolMock.SetupGet(s => s.Name).Returns("MES");
             _symbolMock.SetupGet(s => s.TickSize).Returns(0.25);
             _symbolMock.SetupGet(s => s.Last).Returns(5000.0);
             _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5); // $5/tick
@@ -570,16 +571,16 @@ namespace AutoSizeStrategy.Test
         [InlineData(10, "MNQ", 10, 0, true)]
         public void ProcessRequest_MaxContractsCap_Scenarios(
             int sizeCap,
-            string symbolId,
+            string symbolName,
             double netPosition,
             double expectedQty,
             bool expectCapLog)
         {
             _settingsMock.SetupGet(s => s.MaxContractsMicro)
-                .Returns(symbolId.StartsWith("M") ? sizeCap : 0);
+                .Returns(symbolName.StartsWith("M") ? sizeCap : 0);
             _settingsMock.SetupGet(s => s.MaxContractsMini)
-                .Returns(symbolId.StartsWith("M") ? 0 : sizeCap);
-            _symbolMock.SetupGet(s => s.Id).Returns(symbolId);
+                .Returns(symbolName.StartsWith("M") ? 0 : sizeCap);
+            _symbolMock.SetupGet(s => s.Name).Returns(symbolName);
 
             _serviceMock
                 .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
