@@ -322,6 +322,34 @@ namespace AutoSizeStrategy.Test
             Assert.Equal(100.0, result.RelativeValueAtRiskPercent);
         }
 
+        [Fact]
+        public void ValueAtRisk_EndOfDayAccount_UsesOverrideForMaxExposure()
+        {
+            // Arrange: Set up an EOD account with a strict override
+            _accountMock.SetupGet(a => a.Balance).Returns(150000);
+            _accountMock.SetupGet(a => a.Id).Returns("TPT123456"); // EOD Pattern
+            _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(147000);
+            _settingsMock.SetupGet(s => s.DrawdownMode).Returns(DrawdownMode.EndOfDay);
+
+            // Expected VaR Max Exposure should be precisely 150000 - 147000 = 3000
+
+            var posMock = new Mock<IPosition>();
+            posMock.SetupGet(p => p.Symbol).Returns(_symbolMock.Object);
+            posMock.SetupGet(p => p.Side).Returns(Side.Buy);
+            posMock.SetupGet(p => p.Quantity).Returns(1); // 1 unprotected contract
+            posMock.SetupGet(p => p.OpenPrice).Returns(5000.0);
+            posMock.SetupGet(p => p.Account).Returns(_accountMock.Object);
+
+            // Act
+            var metrics = CreateMetrics(positions: [posMock.Object]);
+            var result = metrics.GetAccountMetrics();
+
+            // Assert
+            // If the old bug was still present, AbsoluteValueAtRisk would incorrectly be 150,000 here.
+            Assert.Equal(3000, result.AbsoluteValueAtRisk);
+            Assert.Equal(100.0, result.RelativeValueAtRiskPercent);
+        }
+
         #endregion
     }
 }

@@ -45,7 +45,7 @@ namespace AutoSizeStrategy
             if (costPerContract <= 0)
                 return new AccountMetrics(availableRiskCapital, null, null, null, null);
 
-            var (absVaR, relVaR) = CalculateValueAtRisk(account);
+            var (absVaR, relVaR) = CalculateValueAtRisk(account, availableRiskCapital);
             double liquidationThreshold = account.Balance - availableRiskCapital;
             double clutchTriggerBalance = liquidationThreshold + _settings.ClutchModeBudget;
 
@@ -76,20 +76,11 @@ namespace AutoSizeStrategy
             );
         }
 
-        // Distance to broker liquidation if known, otherwise full balance
-        private static double GetMaxExposure(IAccount account)
-        {
-            return account.TryGetInfoDouble("AutoLiquidateThresholdCurrentValue", out double threshold)
-                ? account.Balance - threshold
-                : account.Balance;
-        }
-
-        private (double absolute, double relativePct) CalculateValueAtRisk(IAccount account)
+        private (double absolute, double relativePct) CalculateValueAtRisk(IAccount account, double availableRiskCapital)
         {
             if (account == null)
                 return (double.NaN, double.NaN);
 
-            double maxExposure = GetMaxExposure(account);
             double totalAbsolute = 0;
 
             var positions = tradingService?.GetPositions(account).ToList() ?? [];
@@ -102,7 +93,7 @@ namespace AutoSizeStrategy
 
                 if (!double.IsFinite(tickValue) || tickValue <= 0 || tickSize <= 0)
                 {
-                    return (maxExposure, 100.0);
+                    return (availableRiskCapital, 100.0);
                 }
 
                 // Find all protective stops for this position
@@ -139,12 +130,12 @@ namespace AutoSizeStrategy
 
                 if (unprotectedQty > MathUtil.Epsilon)
                 {
-                    return (maxExposure, 100.0);
+                    return (availableRiskCapital, 100.0);
                 }
             }
 
-            double absolute = Math.Min(totalAbsolute, maxExposure);
-            double relativePct = maxExposure > 0 ? (absolute / maxExposure) * 100.0 : 0;
+            double absolute = Math.Min(totalAbsolute, availableRiskCapital);
+            double relativePct = availableRiskCapital > 0 ? (absolute / availableRiskCapital) * 100.0 : 0;
             return (absolute, relativePct);
         }
 
