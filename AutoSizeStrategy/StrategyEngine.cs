@@ -56,7 +56,7 @@ namespace AutoSizeStrategy
             if (orderRequestParameters.IsExitForPosition(netPosition))
             {
                 context.Logger.LogInfo(
-                    $"Passing through exit request {orderRequestParameters.RequestId} (NetPos: {netPosition}) unchanged."
+                    $"Passing through exit request {orderRequestParameters.RequestId} unchanged. NetPos: {netPosition}"
                 );
                 return;
             }
@@ -195,7 +195,7 @@ namespace AutoSizeStrategy
             if (remainingCapacity <= 0)
             {
                 context.Logger.LogInfo(
-                    $"Request {orderRequestParameters.RequestId} cancelled: position already at target size ({calculatedSize})"
+                    $"Request {orderRequestParameters.RequestId} cancelled: position already at or above target size ({calculatedSize})"
                 );
                 orderRequestParameters.Quantity = 0;
                 return;
