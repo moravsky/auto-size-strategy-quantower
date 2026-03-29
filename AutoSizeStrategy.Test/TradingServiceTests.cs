@@ -294,7 +294,8 @@ namespace AutoSizeStrategy.Test
             var localService = new TradingService(
                 _loggerMock.Object,
                 () => [posMock.Object],
-                () => []
+                () => [],
+                new TradingServiceSettings()
             );
 
             var netPos = localService.GetNetPositionQuantity(accMock.Object, symMock.Object);
@@ -315,7 +316,8 @@ namespace AutoSizeStrategy.Test
             var localService = new TradingService(
                 _loggerMock.Object,
                 () => [],
-                () => []
+                () => [],
+                new TradingServiceSettings()
             );
 
             var netPos = localService.GetNetPositionQuantity(accMock.Object, symMock.Object);

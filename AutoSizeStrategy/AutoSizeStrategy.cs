@@ -56,10 +56,12 @@ namespace AutoSizeStrategy
 
             _shutdownCts = new CancellationTokenSource();
 
+            var tradingServiceSettings = new TradingServiceSettings();
             var tradingService = new TradingService(
                 this,
                 () => Core.Instance.Positions.Select(p => new PositionWrapper(p)),
-                () => Core.Instance.Orders.Select(o => new OrderWrapper(o))
+                () => Core.Instance.Orders.Select(o => new OrderWrapper(o)),
+                tradingServiceSettings
             );
 
             this._metrics = new Metrics(this, tradingService);

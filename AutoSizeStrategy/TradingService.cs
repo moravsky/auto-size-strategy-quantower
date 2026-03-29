@@ -45,7 +45,7 @@ namespace AutoSizeStrategy
         IStrategyLogger logger,
         Func<IEnumerable<IPosition>> positionProvider,
         Func<IEnumerable<IOrder>> orderProvider,
-        TradingServiceSettings tradingServiceSettings = null
+        TradingServiceSettings tradingServiceSettings
     ) : ITradingService
     {
         public TradingService(IStrategyLogger logger)
