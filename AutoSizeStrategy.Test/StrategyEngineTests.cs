@@ -285,7 +285,8 @@ namespace AutoSizeStrategy.Test
 
             Assert.Equal(10, request.Quantity);
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("passing through unchanged"))),
+                // Updated the log string to match the engine
+                l => l.LogInfo(It.Is<string>(s => s.Contains("bypassing risk math"))),
                 Times.Once
             );
         }
@@ -609,6 +610,49 @@ namespace AutoSizeStrategy.Test
                 l => l.LogInfo(It.Is<string>(s => s.Contains("Capping calculatedSize"))),
                 expectCapLog ? Times.Once() : Times.Never()
             );
+        }
+
+        [Fact]
+        public void ProcessRequest_MaxContractsCap_AllowsFullReversal()
+        {
+
+            _settingsMock.SetupGet(s => s.MaxContractsMicro).Returns(10);
+            _symbolMock.SetupGet(s => s.Name).Returns("MNQ");
+
+            // Currently Long 5
+            _serviceMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(5.0);
+
+            // User tries to Reverse by Selling 20. 
+            var request = CreateValidRequest(quantity: 20, stopDistanceTicks: 20);
+            request.Inner.Side = Side.Sell; // Reversal direction
+
+            _engine.ProcessRequest(request);
+
+            // Assert: Max allowed should be 5 (to close long) + 10 (max short cap) = 15.
+            Assert.Equal(15, request.Quantity);
+        }
+
+        [Fact]
+        public void ProcessRequest_IgnoreMissingStopLoss_StillEnforcesMaxCap()
+        {
+            // Set to Ignore and a hard cap of 10
+            _settingsMock.SetupGet(s => s.MissingStopLossAction).Returns(MissingStopLossAction.Ignore);
+            _settingsMock.SetupGet(s => s.MaxContractsMicro).Returns(10);
+            _symbolMock.SetupGet(s => s.Name).Returns("MNQ");
+
+            // User sends 50 lots with NO stop loss
+            var request = CreateValidRequest(quantity: 50, stopDistanceTicks: 20);
+            request.StopLossItems.Clear();
+
+            _engine.ProcessRequest(request);
+
+            // The Ignore setting bypassed risk, but the Cap clamped it down to 10
+            Assert.Equal(10, request.Quantity);
+
+            _loggerMock.Verify(l => l.LogInfo(It.Is<string>(s => s.Contains("bypassing risk math"))), Times.Once);
+            _loggerMock.Verify(l => l.LogInfo(It.Is<string>(s => s.Contains("Capping calculatedSize"))), Times.Once);
         }
 
         #endregion

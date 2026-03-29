@@ -19,10 +19,39 @@ namespace AutoSizeStrategy
             if (requestParameters is not IOrderRequestParameters orderRequestParameters)
                 return;
 
+            if (!PerformInitialValidations(orderRequestParameters))
+                return;
+
+            double netPosition = context.TradingService.GetNetPositionQuantity(
+                orderRequestParameters.Account,
+                orderRequestParameters.Symbol
+            );
+
+            if (orderRequestParameters.IsExitForPosition(netPosition))
+            {
+                context.Logger.LogInfo(
+                    $"Passing through exit request {orderRequestParameters.RequestId} (NetPos: {netPosition}) unchanged."
+                );
+                return;
+            }
+
+            int targetQuantity = DetermineTargetQuantity(orderRequestParameters, netPosition);
+
+            if (targetQuantity <= 0)
+            {
+                HandleZeroQuantity(requestParameters, orderRequestParameters);
+                return;
+            }
+
+            ExecuteOrderUpdate(requestParameters, orderRequestParameters, targetQuantity);
+        }
+
+        private bool PerformInitialValidations(IOrderRequestParameters orderRequestParameters)
+        {
             if (context.Settings.CurrentAccount == null)
             {
                 context.Logger.LogError("Target account not set, cannot continue");
-                return;
+                return false;
             }
 
             if (
@@ -33,11 +62,11 @@ namespace AutoSizeStrategy
                 context.Logger.LogError(
                     "End of day drawdown accounts require Minimum Balance Override"
                 );
-                return;
+                return false;
             }
 
             if (context.Settings.CurrentAccount.Id != orderRequestParameters.Account.Id)
-                return;
+                return false;
 
             // Idempotency check
             if (!_processedRequests.TryTrack(orderRequestParameters.RequestId))
@@ -45,44 +74,59 @@ namespace AutoSizeStrategy
                 context.Logger.LogInfo(
                     $"Order request {orderRequestParameters.RequestId} has already been processed - passing through unchanged"
                 );
-                return;
+                return false;
             }
 
-            double netPosition = context.TradingService.GetNetPositionQuantity(
-                orderRequestParameters.Account,
-                orderRequestParameters.Symbol
-            );
+            return true;
+        }
 
-            if (orderRequestParameters.IsExitForPosition(netPosition))
-            {
-                context.Logger.LogInfo(
-                    $"Passing through exit request {orderRequestParameters.RequestId} unchanged. NetPos: {netPosition}"
-                );
-                return;
-            }
+        private int DetermineTargetQuantity(IOrderRequestParameters orderRequestParameters, double netPosition)
+        {
+            int calculatedSize;
+            bool hasStopLoss = orderRequestParameters.StopLossItems != null && orderRequestParameters.StopLossItems.Count > 0;
 
-            if (
-                orderRequestParameters.StopLossItems == null
-                || orderRequestParameters.StopLossItems.Count == 0
-            )
+            if (!hasStopLoss)
             {
                 if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
                 {
-                    context.Logger.LogInfo(
-                        $"Order request {orderRequestParameters.RequestId} cancelled: stop loss required"
-                    );
-                    orderRequestParameters.Quantity = 0;
+                    context.Logger.LogInfo($"Order request {orderRequestParameters.RequestId} cancelled: stop loss required");
+                    return 0;
                 }
-                else if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
+                if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
                 {
-                    context.Logger.LogInfo(
-                        $"Order request {orderRequestParameters.RequestId} has no stop loss - passing through unchanged"
-                    );
+                    // Bypass just the risk math, but still subject this to Caps and Position limits!
+                    context.Logger.LogInfo($"Order request {orderRequestParameters.RequestId} has no stop loss - bypassing risk math");
+                    calculatedSize = (int)orderRequestParameters.Quantity;
                 }
-
-                return;
+                else
+                {
+                    return 0;
+                }
+            }
+            else
+            {
+                calculatedSize = CalculateRiskBasedSize(orderRequestParameters);
+                if (calculatedSize == 0)
+                    return 0;
             }
 
+            calculatedSize = ApplyMaxContractsCap(calculatedSize, orderRequestParameters.Symbol);
+
+            // Adjust for current net position
+            int remainingCapacity = orderRequestParameters.Side.IsExitDirection(netPosition)
+                ? (int)Math.Abs(netPosition) + calculatedSize
+                : calculatedSize - (int)Math.Abs(netPosition);
+
+            if (remainingCapacity <= 0)
+            {
+                context.Logger.LogInfo($"Request {orderRequestParameters.RequestId} cancelled: position already at or above target size ({calculatedSize})");
+                return 0;
+            }
+
+            return remainingCapacity;
+        }
+        private int CalculateRiskBasedSize(IOrderRequestParameters orderRequestParameters)
+        {
             DrawdownMode drawdownMode = context.Settings.DrawdownMode;
             var account = orderRequestParameters.Account;
 
@@ -93,11 +137,11 @@ namespace AutoSizeStrategy
                 out var calculationReason,
                 minAccountBalanceOverride: context.Settings.MinAccountBalanceOverride
             );
+
             if (positionRisk <= 0)
             {
                 context.Logger.LogInfo($"Risk=0 for {account.Id}. Reason: {calculationReason}");
-                orderRequestParameters.Quantity = 0;
-                return;
+                return 0;
             }
 
             var riskCapital = RiskCalculator.GetAvailableRiskCapital(
@@ -106,6 +150,7 @@ namespace AutoSizeStrategy
                 out _,
                 context.Settings.MinAccountBalanceOverride
             );
+
             context.Logger.LogInfo(
                 $"Account balance:{account.Balance} risk capital: {riskCapital} position risk:{positionRisk}"
             );
@@ -114,13 +159,13 @@ namespace AutoSizeStrategy
             double entryPrice = orderRequestParameters.GetLikelyFillPrice();
             double tickSize = symbol.TickSize;
             double tickValue = symbol.GetTickCost(entryPrice);
+
             if (!double.IsFinite(tickValue) || tickValue <= 0)
             {
                 context.Logger.LogError(
                     $"Symbol {symbol.Name} tick value unavailable ({tickValue}), cancelling request {orderRequestParameters.RequestId}"
                 );
-                orderRequestParameters.Quantity = 0;
-                return;
+                return 0;
             }
 
             var slTpHolder = orderRequestParameters.StopLossItems[0];
@@ -142,94 +187,71 @@ namespace AutoSizeStrategy
                 slippageTicks,
                 roundTripCommission
             );
-            context.Logger.LogInfo(
-                $"[{symbol.Name}] cost per contract: {costPerContract:F2} ({stopDistanceTicks}T stop + {slippageTicks}T slip + ${roundTripCommission:F2} comm)");
 
-            int calculatedSize = RiskCalculator.CalculatePositionSize(
+            context.Logger.LogInfo(
+                $"[{symbol.Name}] cost per contract: {costPerContract:F2} ({stopDistanceTicks}T stop + {slippageTicks}T slip + ${roundTripCommission:F2} comm)"
+            );
+
+            return RiskCalculator.CalculatePositionSize(
                 positionRisk,
                 costPerContract
             );
+        }
 
-            // Apply max contracts cap (0 = disabled)
+        private void HandleZeroQuantity(IRequestParameters requestParameters, IOrderRequestParameters orderRequestParameters)
+        {
+            string logMessage = "Risk too big even for 1 contract";
+
+            // If this happened because they modified an existing order's SL to be too wide,
+            // we must aggressively cancel the working order to protect them.
+            if (requestParameters is IModifyOrderRequestParameters modifyZero)
+            {
+                logMessage +=
+                    $". Request {modifyZero.RequestId}: SL too wide, cancelling order {modifyZero.OrderId}";
+                context.TradingService.Cancel(modifyZero.OrderId);
+            }
+
+            context.Logger.LogInfo(logMessage);
+
+            orderRequestParameters.Quantity = 0;
+        }
+
+        private int ApplyMaxContractsCap(int calculatedSize, ISymbol symbol)
+        {
             int sizeCap = symbol.IsMicro()
                 ? context.Settings.MaxContractsMicro
                 : context.Settings.MaxContractsMini;
+
             if (sizeCap > 0 && calculatedSize > sizeCap)
             {
-                context.Logger.LogInfo(
-                    $"Capping calculatedSize from {calculatedSize} to {sizeCap} (Max Contracts limit)"
-                );
-                calculatedSize = sizeCap;
+                context.Logger.LogInfo($"Capping calculatedSize from {calculatedSize} to {sizeCap} (Max Contracts limit)");
+                return sizeCap;
             }
 
-            if (calculatedSize == 0)
-            {
-                string logMessage = "Risk too big even for 1 contract";
+            return calculatedSize;
+        }
 
-                if (requestParameters is IModifyOrderRequestParameters modifyZero)
-                {
-                    logMessage +=
-                        $". Request {modifyZero.RequestId}: SL too wide, cancelling order {modifyZero.OrderId}";
-                    context.TradingService.Cancel(modifyZero.OrderId);
-                }
-
-                context.Logger.LogInfo(logMessage);
-
-                orderRequestParameters.Quantity = 0;
-                return;
-            }
-
-            int remainingCapacity;
-            // If the order is in the opposite direction of our current position (a reversal/exit)
-            if (orderRequestParameters.Side.IsExitDirection(netPosition))
-            {
-                // Capacity = The amount needed to flatten + the max allowed risk in the new direction
-                remainingCapacity = (int)Math.Abs(netPosition) + calculatedSize;
-            }
-            else
-            {
-                // Pyramiding: Capacity = Max allowed risk - what we already hold
-                remainingCapacity = calculatedSize - (int)Math.Abs(netPosition);
-            }
-
-            if (remainingCapacity <= 0)
-            {
-                context.Logger.LogInfo(
-                    $"Request {orderRequestParameters.RequestId} cancelled: position already at or above target size ({calculatedSize})"
-                );
-                orderRequestParameters.Quantity = 0;
-                return;
-            }
-
+        private void ExecuteOrderUpdate(IRequestParameters requestParameters, IOrderRequestParameters orderRequestParameters, int finalQuantity)
+        {
             if (requestParameters is IModifyOrderRequestParameters modifyOrderRequestParameters)
             {
                 context.Logger.LogInfo(
-                    $"Request {modifyOrderRequestParameters.RequestId} resizing order {modifyOrderRequestParameters.OrderId}"
-                    + $" from {orderRequestParameters.Quantity} to {remainingCapacity} via Cancel/Replace. Total capacity: {calculatedSize}."
+                    $"Request {modifyOrderRequestParameters.RequestId} resizing order {modifyOrderRequestParameters.OrderId} from {orderRequestParameters.Quantity} to {finalQuantity} via Cancel/Replace."
                 );
                 context.TradingService.CancelReplace(
                     modifyOrderRequestParameters.OrderId,
-                    IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, remainingCapacity)
+                    IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, finalQuantity)
                 );
-
-                // CancelReplace is going to cancel current buy/sell order and create new one.
-                // We should cancel the modify order, becuase it's job is already done.
-                // NOTE: CancellationToken has no effect here — Quantower ignores it on modify requests
-                // (reported to Quantower devs, no response). The modify still reaches the broker.
-                // This is intentional: we let the modify through at its original qty rather than
-                // zeroing it, because qty=0 triggers a "Modify order request refused" broker warning.
-                // The modify arrives at qty=1, our cancel wins the race and kills the original order,
-                // then the replacement fires at the correct size. Net result is correct with no error flash.
                 orderRequestParameters.CancellationToken = new CancellationToken(canceled: true);
-                return;
             }
-
-            context.Logger.LogInfo(
-                $"Changed request {orderRequestParameters.RequestId} quantity from {orderRequestParameters.Quantity} to {remainingCapacity}. Total capacity: {calculatedSize}."
-            );
-            orderRequestParameters.Quantity = remainingCapacity;
+            else
+            {
+                context.Logger.LogInfo(
+                    $"Changed request {orderRequestParameters.RequestId} quantity from {orderRequestParameters.Quantity} to {finalQuantity}."
+                );
+                orderRequestParameters.Quantity = finalQuantity;
+            }
         }
-
         public void ReportCompletedRequest(RequestParameters requestParameters)
         {
             if (requestParameters is PlaceOrderRequestParameters placeOrderRequestParameters)
