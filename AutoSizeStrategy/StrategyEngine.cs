@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
@@ -211,9 +212,15 @@ namespace AutoSizeStrategy
                     IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, remainingCapacity)
                 );
 
-                //  CancelReplace is going to cancel current buy/sell order and create new one.
-                //  We should cancel the modify order, becuase it's job is already done.
-                orderRequestParameters.Quantity = 0;
+                // CancelReplace is going to cancel current buy/sell order and create new one.
+                // We should cancel the modify order, becuase it's job is already done.
+                // NOTE: CancellationToken has no effect here — Quantower ignores it on modify requests
+                // (reported to Quantower devs, no response). The modify still reaches the broker.
+                // This is intentional: we let the modify through at its original qty rather than
+                // zeroing it, because qty=0 triggers a "Modify order request refused" broker warning.
+                // The modify arrives at qty=1, our cancel wins the race and kills the original order,
+                // then the replacement fires at the correct size. Net result is correct with no error flash.
+                orderRequestParameters.CancellationToken = new CancellationToken(canceled: true);
                 return;
             }
 

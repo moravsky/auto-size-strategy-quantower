@@ -453,7 +453,7 @@ namespace AutoSizeStrategy.Test
         [Fact]
         public void ProcessRequest_ModifyOrder_CalculatesRiskCorrectly()
         {
-            _accountMock.SetupGet(a => a.Id).Returns("Static"); // Intraday account
+            _accountMock.SetupGet(a => a.Id).Returns("Static");
             var requestMock = new Mock<IModifyOrderRequestParameters>();
 
             requestMock.SetupGet(r => r.RequestId).Returns(12345);
@@ -469,20 +469,34 @@ namespace AutoSizeStrategy.Test
             var tpList = new List<SlTpHolder> { SlTpHolder.CreateTP(20, PriceMeasurement.Offset) };
             requestMock.SetupGet(r => r.TakeProfitItems).Returns(tpList);
 
-            // Setup the "Requested" Quantity
-            // We use SetupProperty so the Engine can update it
-            requestMock.SetupProperty(r => r.Quantity, 100);
+            requestMock.SetupProperty(r => r.Quantity, 100.0);
+            requestMock.SetupProperty(r => r.CancellationToken, CancellationToken.None);
+
+            // Capture the replacement params from CancelReplace
+            IPlaceOrderRequestParameters? capturedReplacement = null;
+            _serviceMock
+                .Setup(s => s.CancelReplace(It.IsAny<string>(), It.IsAny<IPlaceOrderRequestParameters>()))
+                .Callback<string, IPlaceOrderRequestParameters>((_, p) => capturedReplacement = p);
 
             _engine.ProcessRequest(requestMock.Object);
 
-            // Original modify request is cancelled, because changing quantity
-            // requires cancel/replace sequence
-            Assert.Equal(0, requestMock.Object.Quantity);
+            // Original modify is suppressed via cancellation token
+            Assert.True(requestMock.Object.CancellationToken.IsCancellationRequested);
 
-            // Balance 150k.
-            // Risk 10% = $15K.
-            // SL 20 ticks * $5/tick = $100 risk/contract.
-            // Expected Replacement Size = 150 contracts.
+            // CancelReplace fired on the correct order
+            _serviceMock.Verify(
+                s => s.CancelReplace(
+                    It.Is<string>(id => id == "order67"),
+                    It.IsAny<IPlaceOrderRequestParameters>()
+                ),
+                Times.Once
+            );
+
+            // Balance 150k, Risk 10% = $15k
+            // MES: (20 ticks stop + 1 tick slip) * $5 + $0.50 round-trip comm = $105.50/contract
+            // 15000 / 105.50 = 142.18 -> 142 contracts
+            Assert.NotNull(capturedReplacement);
+            Assert.Equal(142, capturedReplacement.Quantity);
 
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(s => s.Contains("resizing order"))),
