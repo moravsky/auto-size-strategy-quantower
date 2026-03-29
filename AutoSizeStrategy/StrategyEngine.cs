@@ -30,7 +30,7 @@ namespace AutoSizeStrategy
             if (orderRequestParameters.IsExitForPosition(netPosition))
             {
                 context.Logger.LogInfo(
-                    $"Passing through exit request {orderRequestParameters.RequestId} (NetPos: {netPosition}) unchanged."
+                    $"Passing through exit request {orderRequestParameters.RequestId} unchanged. NetPos: {netPosition}"
                 );
                 return;
             }
@@ -200,7 +200,7 @@ namespace AutoSizeStrategy
 
         private void HandleZeroQuantity(IRequestParameters requestParameters, IOrderRequestParameters orderRequestParameters)
         {
-            string logMessage = "Risk too big even for 1 contract";
+            string logMessage = "Insufficient risk budget for this stop loss distance";
 
             // If this happened because they modified an existing order's SL to be too wide,
             // we must aggressively cancel the working order to protect them.
@@ -215,7 +215,7 @@ namespace AutoSizeStrategy
 
             orderRequestParameters.Quantity = 0;
         }
-
+        
         private int ApplyMaxContractsCap(int calculatedSize, ISymbol symbol)
         {
             int sizeCap = symbol.IsMicro()

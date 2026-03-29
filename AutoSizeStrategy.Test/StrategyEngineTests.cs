@@ -247,7 +247,7 @@ namespace AutoSizeStrategy.Test
 
             // Verify Log
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("Risk too big"))),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Insufficient risk budget"))),
                 Times.Once
             );
         }
@@ -307,7 +307,7 @@ namespace AutoSizeStrategy.Test
 
             Assert.Equal(0, request.Quantity);
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("Risk too big"))),
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Insufficient risk budget"))),
                 Times.Once
             );
         }
