@@ -35,6 +35,8 @@ WizardStyle=modern
 Uninstallable=no
 UsePreviousAppDir=no
 DirExistsWarning=no
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

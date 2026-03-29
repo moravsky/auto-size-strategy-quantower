@@ -15,7 +15,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <Platforms>AnyCPU</Platforms>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
     <AlgoType>Strategy</AlgoType>
     <AssemblyName>AutoSizeStrategy</AssemblyName>
     <RootNamespace>AutoSizeStrategy</RootNamespace>
