@@ -15,7 +15,7 @@ namespace AutoSizeStrategy
         public static partial Regex EndOfDayAccountPattern();
 
         // Micro contracts: MNQ, MES, MGC, MYM, M2K, etc.
-        [GeneratedRegex("^(MES|MNQ|MYM|M2K|MGC|MHG|MCL|M6E|M6A|M6B|MSF|MJY|MBT|MET|MSOL|MXRP|SIL|PAM)$")]
+        [GeneratedRegex(@"^(MES|MNQ|MYM|M2K|MGC|MHG|MCL|M6E|M6A|M6B|MSF|MJY|MBT|MET|MSOL|MXRP|SIL|PAM)")]
         private static partial Regex MicroContractPattern();
 
         public static bool IsMicro(this ISymbol symbol)

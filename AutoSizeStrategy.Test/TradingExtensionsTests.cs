@@ -339,11 +339,21 @@ namespace AutoSizeStrategy.Test
         [InlineData("MGC", true)]
         [InlineData("MYM", true)]
         [InlineData("M2K", true)]
+        [InlineData("MNQM6", true)]
+        [InlineData("MESZ6", true)]
+        [InlineData("MGCH7", true)]
+        [InlineData("M2KU6", true)]
+        [InlineData("MYMZ6", true)]
         [InlineData("NQ", false)]
         [InlineData("ES", false)]
         [InlineData("GC", false)]
         [InlineData("CL", false)]
         [InlineData("6E", false)]
+        [InlineData("NQM6", false)]
+        [InlineData("ESZ6", false)]
+        [InlineData("GCH7", false)]
+        [InlineData("RTYU6", false)]
+        [InlineData("YMZ6", false)]
         public void IsMicro_BySymbolName(string symbolName, bool expected)
         {
             var symbolMock = new Mock<ISymbol>();
