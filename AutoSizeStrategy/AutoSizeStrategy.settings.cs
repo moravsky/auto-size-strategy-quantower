@@ -154,6 +154,7 @@ namespace AutoSizeStrategy
             {
                 Minimum = 0.0,
                 Increment = 0.01,
+                DecimalPlaces = 2,
                 Description = """
                               Required for End of Day (EOD) drawdown accounts.
                               Sets the hard floor balance where the account is busted.
