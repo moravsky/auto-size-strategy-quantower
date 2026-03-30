@@ -35,6 +35,14 @@ namespace AutoSizeStrategy
                 return;
             }
 
+            bool hasStopLoss = orderRequestParameters.StopLossItems?.Count > 0;
+            if (!hasStopLoss && context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
+            {
+                context.Logger.LogInfo($"Order request {orderRequestParameters.RequestId} cancelled: stop loss required");
+                orderRequestParameters.Quantity = 0;
+                return;
+            }
+
             int targetQuantity = DetermineTargetQuantity(orderRequestParameters, netPosition);
 
             if (targetQuantity <= 0)
@@ -85,29 +93,21 @@ namespace AutoSizeStrategy
             int calculatedSize;
             bool hasStopLoss = orderRequestParameters.StopLossItems != null && orderRequestParameters.StopLossItems.Count > 0;
 
-            if (!hasStopLoss)
+            if (!hasStopLoss && context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
             {
-                if (context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
-                {
-                    context.Logger.LogInfo($"Order request {orderRequestParameters.RequestId} cancelled: stop loss required");
-                    return 0;
-                }
-                if (context.Settings.MissingStopLossAction == MissingStopLossAction.Ignore)
-                {
-                    // Bypass just the risk math, but still subject this to Caps and Position limits!
-                    context.Logger.LogInfo($"Order request {orderRequestParameters.RequestId} has no stop loss - bypassing risk math");
-                    calculatedSize = (int)orderRequestParameters.Quantity;
-                }
-                else
-                {
-                    return 0;
-                }
+                // Bypass just the risk math, but still subject this to Caps and Position limits!
+                context.Logger.LogInfo($"Order request {orderRequestParameters.RequestId} has no stop loss - bypassing risk math");
+                calculatedSize = (int)orderRequestParameters.Quantity;
             }
-            else
+            else if (hasStopLoss)
             {
                 calculatedSize = CalculateRiskBasedSize(orderRequestParameters);
                 if (calculatedSize == 0)
                     return 0;
+            }
+            else
+            {
+                return 0;
             }
 
             calculatedSize = ApplyMaxContractsCap(calculatedSize, orderRequestParameters.Symbol);
@@ -125,6 +125,7 @@ namespace AutoSizeStrategy
 
             return remainingCapacity;
         }
+
         private int CalculateRiskBasedSize(IOrderRequestParameters orderRequestParameters)
         {
             DrawdownMode drawdownMode = context.Settings.DrawdownMode;
@@ -215,7 +216,7 @@ namespace AutoSizeStrategy
 
             orderRequestParameters.Quantity = 0;
         }
-        
+
         private int ApplyMaxContractsCap(int calculatedSize, ISymbol symbol)
         {
             int sizeCap = symbol.IsMicro()

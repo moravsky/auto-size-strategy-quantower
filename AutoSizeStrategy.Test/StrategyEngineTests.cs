@@ -269,6 +269,10 @@ namespace AutoSizeStrategy.Test
                 l => l.LogInfo(It.Is<string>(s => s.Contains("cancelled: stop loss required"))),
                 Times.Once
             );
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Insufficient risk budget"))),
+                Times.Never
+            );
         }
 
         [Fact]
