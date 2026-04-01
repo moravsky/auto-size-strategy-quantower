@@ -485,8 +485,10 @@ namespace AutoSizeStrategy.Test
 
             _engine.ProcessRequest(requestMock.Object);
 
-            // Original modify is suppressed via cancellation token
+            // Original modify is suppressed: cancellation token set and quantity zeroed
+            // (Quantower does not reliably respect CancellationToken alone)
             Assert.True(requestMock.Object.CancellationToken.IsCancellationRequested);
+            Assert.Equal(0, requestMock.Object.Quantity);
 
             // CancelReplace fired on the correct order
             _serviceMock.Verify(
@@ -505,6 +507,49 @@ namespace AutoSizeStrategy.Test
 
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(s => s.Contains("resizing order"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
+        public void ProcessRequest_ModifyOrder_QuantityUnchanged_DoesNotCancelReplace()
+        {
+            _accountMock.SetupGet(a => a.Id).Returns("Static");
+            var requestMock = new Mock<IModifyOrderRequestParameters>();
+
+            requestMock.SetupGet(r => r.RequestId).Returns(99999);
+            requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
+            requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
+            requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
+            requestMock.SetupGet(r => r.OrderId).Returns("order88");
+            requestMock.SetupGet(r => r.OrderTypeId).Returns(OrderType.Limit);
+
+            var slList = new List<SlTpHolder> { SlTpHolder.CreateSL(20, PriceMeasurement.Offset) };
+            requestMock.SetupGet(r => r.StopLossItems).Returns(slList);
+
+            var tpList = new List<SlTpHolder> { SlTpHolder.CreateTP(20, PriceMeasurement.Offset) };
+            requestMock.SetupGet(r => r.TakeProfitItems).Returns(tpList);
+
+            // Start at the calculated quantity (142) so quantity is unchanged
+            requestMock.SetupProperty(r => r.Quantity, 142.0);
+            requestMock.SetupProperty(r => r.CancellationToken, CancellationToken.None);
+
+            _engine.ProcessRequest(requestMock.Object);
+
+            // CancelReplace must NOT fire — would create duplicate order
+            _serviceMock.Verify(
+                s => s.CancelReplace(It.IsAny<string>(), It.IsAny<IPlaceOrderRequestParameters>()),
+                Times.Never
+            );
+
+            // Cancellation token must NOT be set — let Quantower route natively
+            Assert.False(requestMock.Object.CancellationToken.IsCancellationRequested);
+
+            // Quantity must NOT be zeroed — request passes through unchanged
+            Assert.Equal(142, requestMock.Object.Quantity);
+
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("quantity unchanged") && s.Contains("SL:") && s.Contains("TP:"))),
                 Times.Once
             );
         }
