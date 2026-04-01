@@ -236,14 +236,34 @@ namespace AutoSizeStrategy
         {
             if (requestParameters is IModifyOrderRequestParameters modifyOrderRequestParameters)
             {
-                context.Logger.LogInfo(
-                    $"Request {modifyOrderRequestParameters.RequestId} resizing order {modifyOrderRequestParameters.OrderId} from {orderRequestParameters.Quantity} to {finalQuantity} via Cancel/Replace."
-                );
-                context.TradingService.CancelReplace(
-                    modifyOrderRequestParameters.OrderId,
-                    IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, finalQuantity)
-                );
-                orderRequestParameters.CancellationToken = new CancellationToken(canceled: true);
+                bool quantityChanged = !MathUtil.Equals(orderRequestParameters.Quantity, finalQuantity);
+
+                if (quantityChanged)
+                {
+                    context.Logger.LogInfo(
+                        $"Request {modifyOrderRequestParameters.RequestId} resizing order " +
+                        $"{modifyOrderRequestParameters.OrderId} from {orderRequestParameters.Quantity} " +
+                        $"to {finalQuantity} via Cancel/Replace."
+                    );
+                    context.TradingService.CancelReplace(
+                        modifyOrderRequestParameters.OrderId,
+                        IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, finalQuantity)
+                    );
+                    // Quantower does not reliably respect CancellationToken — also zero out Quantity
+                    // so the original Modify becomes a no-op if it reaches the exchange.
+                    orderRequestParameters.CancellationToken = new CancellationToken(canceled: true);
+                    orderRequestParameters.Quantity = 0;
+                }
+                else
+                {
+                    // Quantity unchanged — no Cancel/Replace needed, let Quantower route natively.
+                    context.Logger.LogInfo(
+                        $"Request {modifyOrderRequestParameters.RequestId} quantity unchanged " +
+                        $"at {finalQuantity} for order {modifyOrderRequestParameters.OrderId}. " +
+                        $"SL: [{string.Join(", ", modifyOrderRequestParameters.StopLossItems)}] " +
+                        $"TP: [{string.Join(", ", modifyOrderRequestParameters.TakeProfitItems)}]"
+                    );
+                }
             }
             else
             {
