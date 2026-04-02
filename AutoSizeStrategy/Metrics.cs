@@ -23,7 +23,7 @@ namespace AutoSizeStrategy
             settings ?? throw new ArgumentNullException(nameof(settings));
 
         public ISymbol LastSymbol { get; set; } = new DefaultSymbol();
-        public double LastStopDistanceTicks { get; set; } = settings.MinimumStopLossTicks;
+        public double LastStopDistanceTicks { get; set; } = settings.InitialStopLossTicks;
 
         public AccountMetrics GetAccountMetrics()
         {
@@ -114,7 +114,10 @@ namespace AutoSizeStrategy
                         break;
 
                     double expectedExitPrice = stop.GetLikelyFillPrice();
-                    double distanceTicks = Math.Abs(pos.OpenPrice - expectedExitPrice) / tickSize;
+                    double distanceTicks = pos.Side == Side.Buy
+                        ? (pos.OpenPrice - expectedExitPrice) / tickSize   // LONG: positive below entry (loss)
+                        : (expectedExitPrice - pos.OpenPrice) / tickSize;  // SHORT: positive above entry (loss)
+                    distanceTicks = Math.Max(distanceTicks, 0);            // stop in profit territory → 0 distance
                     double protectedQty = Math.Min(stop.TotalQuantity, unprotectedQty);
 
                     double exitCostPerContract = RiskCalculator.CalculateCostPerContract(
@@ -141,7 +144,7 @@ namespace AutoSizeStrategy
 
         private double GetCostPerContract()
         {
-            double stopTicks = Math.Max(LastStopDistanceTicks, _settings.MinimumStopLossTicks);
+            double stopTicks = LastStopDistanceTicks;
 
             if (stopTicks <= 0)
                 return 0;
