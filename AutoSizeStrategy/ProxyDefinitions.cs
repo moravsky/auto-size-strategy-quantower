@@ -172,6 +172,7 @@ namespace AutoSizeStrategy
         List<SlTpHolder> StopLossItems { get; set; }
         List<SlTpHolder> TakeProfitItems { get; set; }
         string OrderTypeId { get; init; }
+        TimeInForce TimeInForce { get; set; }
 
         TradingOperationResult Send();
     }
@@ -198,6 +199,7 @@ namespace AutoSizeStrategy
                 Price = modify.Price,
                 TriggerPrice = modify.TriggerPrice,
                 OrderTypeId = modify.OrderTypeId,
+                TimeInForce = modify.TimeInForce,
                 Quantity = newQuantity,
                 StopLossItems = modify.StopLossItems?.ToList(), // Clone the list to avoid side effects
                 TakeProfitItems = modify.TakeProfitItems?.ToList(),
@@ -311,6 +313,12 @@ namespace AutoSizeStrategy
         {
             get => Inner.OrderTypeId;
             init => Inner.OrderTypeId = value;
+        }
+
+        public TimeInForce TimeInForce
+        {
+            get => Inner.TimeInForce;
+            set => Inner.TimeInForce = value;
         }
 
         public abstract TradingOperationResult Send();

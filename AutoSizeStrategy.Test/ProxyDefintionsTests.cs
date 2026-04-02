@@ -52,6 +52,7 @@ namespace AutoSizeStrategy.Test
             modifyMock.SetupGet(m => m.Side).Returns(Side.Buy);
             modifyMock.SetupGet(m => m.Price).Returns(5000.0);
             modifyMock.SetupGet(m => m.OrderTypeId).Returns(OrderType.Limit);
+            modifyMock.SetupGet(m => m.TimeInForce).Returns(TimeInForce.GTC);
 
             var stopLossItems = new List<SlTpHolder>()
             {
@@ -86,6 +87,8 @@ namespace AutoSizeStrategy.Test
             Assert.Equal(5000.0, result.Inner.Price);
             Assert.Equal(5.0, result.Inner.Quantity);
             Assert.Equal("Limit", result.Inner.OrderTypeId);
+            Assert.Equal(TimeInForce.GTC, result.TimeInForce);
+            Assert.Equal(TimeInForce.GTC, result.Inner.TimeInForce);
         }
 
         [Fact]
