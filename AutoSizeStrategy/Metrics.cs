@@ -142,6 +142,10 @@ namespace AutoSizeStrategy
         private double GetCostPerContract()
         {
             double stopTicks = Math.Max(LastStopDistanceTicks, _settings.MinimumStopLossTicks);
+
+            if (stopTicks <= 0)
+                return 0;
+
             double tickVal = LastSymbol.GetTickCost(LastSymbol.Last);
 
             if (!double.IsFinite(tickVal) || tickVal <= 0)

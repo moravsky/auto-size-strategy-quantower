@@ -39,8 +39,8 @@ namespace AutoSizeStrategy
             if (tickValue <= 0)
                 throw new ArgumentOutOfRangeException(nameof(tickValue), "Tick value must be positive");
 
-            if (stopDistanceTicks <= 0)
-                throw new ArgumentOutOfRangeException(nameof(stopDistanceTicks), "Stop distance must be > 0");
+            if (stopDistanceTicks < 0)
+                throw new ArgumentOutOfRangeException(nameof(stopDistanceTicks), "Stop distance cannot be negative");
 
             if (slippageTicks < 0)
                 throw new ArgumentOutOfRangeException(nameof(slippageTicks), "Slippage cannot be negative");
