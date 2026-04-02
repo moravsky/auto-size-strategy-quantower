@@ -265,7 +265,7 @@ namespace AutoSizeStrategy
                     );
                 }
             }
-            else
+            else if (!MathUtil.Equals(orderRequestParameters.Quantity, finalQuantity))
             {
                 context.Logger.LogInfo(
                     $"Changed request {orderRequestParameters.RequestId} quantity from {orderRequestParameters.Quantity} to {finalQuantity}."
