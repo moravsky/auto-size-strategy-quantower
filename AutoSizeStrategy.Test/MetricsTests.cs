@@ -350,6 +350,60 @@ namespace AutoSizeStrategy.Test
             Assert.Equal(100.0, result.RelativeValueAtRiskPercent);
         }
 
+        [Fact]
+        public void ValueAtRisk_BreakevenStop_UsesSlippageAndCommissionOnly()
+        {
+            // Breakeven stop (stop moved to entry price) is a normal scenario — zero price distance,
+            // but slippage + commission still apply. Must not throw.
+            _accountMock.SetupGet(a => a.Balance).Returns(150000);
+            _symbolMock.SetupGet(s => s.TickSize).Returns(0.25);
+            _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5.0);
+            _settingsMock.SetupGet(s => s.AverageSlippageTicks).Returns(2.0);
+
+            var posMock = new Mock<IPosition>();
+            posMock.SetupGet(p => p.Symbol).Returns(_symbolMock.Object);
+            posMock.SetupGet(p => p.Side).Returns(Side.Buy);
+            posMock.SetupGet(p => p.Quantity).Returns(2);
+            posMock.SetupGet(p => p.OpenPrice).Returns(5000.0);
+            posMock.SetupGet(p => p.Account).Returns(_accountMock.Object);
+
+            var orderMock = new Mock<IOrder>();
+            orderMock.SetupGet(o => o.Symbol).Returns(_symbolMock.Object);
+            orderMock.SetupGet(o => o.Side).Returns(Side.Sell);
+            orderMock.SetupGet(o => o.OrderTypeId).Returns(OrderType.Stop);
+            orderMock.SetupGet(o => o.TriggerPrice).Returns(5000.0); // breakeven — at entry price
+            orderMock.SetupGet(o => o.Price).Returns(0.0);
+            orderMock.SetupGet(o => o.TotalQuantity).Returns(2);
+            orderMock.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
+
+            var metrics = CreateMetrics(
+                positions: [posMock.Object],
+                orders: [orderMock.Object]
+            );
+
+            var result = metrics.GetAccountMetrics();
+
+            // (0 ticks distance + 2 slip ticks) * $5 + $0.25 comm = $10.25/contract * 2 = $20.50
+            Assert.Equal(20.50, result.AbsoluteValueAtRisk ?? 0.0, precision: 2);
+            Assert.Equal(20.50 / 45.0, result.RelativeValueAtRiskPercent ?? 0.0, precision: 4);
+        }
+
         #endregion
+
+        [Fact]
+        public void GetAccountMetrics_ZeroStopDistance_ReturnsNullTrades()
+        {
+            // LastStopDistanceTicks = 0 means no SL has been configured yet — can't size.
+            // MinimumStopLossTicks = 0 removes the usual floor (e.g. hand-edited settings XML).
+            _settingsMock.SetupGet(s => s.MinimumStopLossTicks).Returns(0);
+
+            var metrics = CreateMetrics(symbol: _symbolMock.Object);
+            metrics.LastStopDistanceTicks = 0;
+
+            var result = metrics.GetAccountMetrics();
+
+            Assert.Null(result.TradesToClutchMode);
+            Assert.Null(result.TradesToBust);
+        }
     }
 }

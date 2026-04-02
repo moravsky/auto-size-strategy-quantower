@@ -32,6 +32,8 @@ namespace AutoSizeStrategy.Test
         [InlineData(80, 5, 2, 5, 415)]
         // CRUDE OIL (CL-like): Stop 30 ticks. Tick Value $10. Slip 0. Comm $3. -> 30*10 + 3 = 303
         [InlineData(30, 10, 0, 3, 303)]
+        // BREAKEVEN STOP: 0 ticks distance. Slip 1 tick. Comm $0.50. -> (0+1)*5 + 0.50 = 5.50
+        [InlineData(0, 5, 1, 0.50, 5.50)]
         public void CalculateCostPerContract_Scenarios_ReturnCorrectCost(
             double stopDistanceTicks,
             double tickValue,
@@ -51,7 +53,7 @@ namespace AutoSizeStrategy.Test
         }
 
         [Theory]
-        [InlineData(0, 5, 0, 0)] // zero stop
+        [InlineData(-1, 5, 0, 0)] // negative stop
         [InlineData(20, 0, 0, 0)] // zero tick value
         [InlineData(20, 5, -1, 0)] // negative slip
         [InlineData(20, 5, 0, -1)] // negative comm
