@@ -37,7 +37,7 @@ namespace AutoSizeStrategy.Test
             _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(0.50);
 
             _settingsMock.SetupGet(s => s.MinAccountBalanceOverride).Returns(0.0);
-            _settingsMock.SetupGet(s => s.MinimumStopLossTicks).Returns(64); // 16 pts
+            _settingsMock.SetupGet(s => s.InitialStopLossTicks).Returns(64); // 16 pts
             _settingsMock.SetupGet(s => s.RiskPercent).Returns(10.0);
 
             // Slip 1 tick ($0.50) + Comm ($0.25).
@@ -351,6 +351,74 @@ namespace AutoSizeStrategy.Test
         }
 
         [Fact]
+        public void ValueAtRisk_LongPosition_StopInProfit_UsesSlippageAndCommissionOnly()
+        {
+            // LONG at 5000, stop at 5010 (40 ticks above entry = profit territory).
+            // distanceTicks = (5000 - 5010) / 0.25 = -40, clamped to 0.
+            // VaR = (0 + 2 slip) * $5 + $0.25 comm = $10.25/contract * 2 = $20.50
+            _accountMock.SetupGet(a => a.Balance).Returns(150000);
+            _symbolMock.SetupGet(s => s.TickSize).Returns(0.25);
+            _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5.0);
+            _settingsMock.SetupGet(s => s.AverageSlippageTicks).Returns(2.0);
+
+            var posMock = new Mock<IPosition>();
+            posMock.SetupGet(p => p.Symbol).Returns(_symbolMock.Object);
+            posMock.SetupGet(p => p.Side).Returns(Side.Buy);
+            posMock.SetupGet(p => p.Quantity).Returns(2);
+            posMock.SetupGet(p => p.OpenPrice).Returns(5000.0);
+            posMock.SetupGet(p => p.Account).Returns(_accountMock.Object);
+
+            var orderMock = new Mock<IOrder>();
+            orderMock.SetupGet(o => o.Symbol).Returns(_symbolMock.Object);
+            orderMock.SetupGet(o => o.Side).Returns(Side.Sell);
+            orderMock.SetupGet(o => o.OrderTypeId).Returns(OrderType.Stop);
+            orderMock.SetupGet(o => o.TriggerPrice).Returns(5010.0); // 40 ticks above entry
+            orderMock.SetupGet(o => o.Price).Returns(0.0);
+            orderMock.SetupGet(o => o.TotalQuantity).Returns(2);
+            orderMock.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
+
+            var metrics = CreateMetrics(positions: [posMock.Object], orders: [orderMock.Object]);
+            var result = metrics.GetAccountMetrics();
+
+            Assert.Equal(20.50, result.AbsoluteValueAtRisk ?? 0.0, precision: 2);
+            Assert.Equal(20.50 / 45.0, result.RelativeValueAtRiskPercent ?? 0.0, precision: 4);
+        }
+
+        [Fact]
+        public void ValueAtRisk_ShortPosition_StopInProfit_UsesSlippageAndCommissionOnly()
+        {
+            // SHORT at 5000, stop at 4990 (40 ticks below entry = profit territory for short).
+            // distanceTicks = (4990 - 5000) / 0.25 = -40, clamped to 0.
+            // VaR = (0 + 2 slip) * $5 + $0.25 comm = $10.25/contract * 2 = $20.50
+            _accountMock.SetupGet(a => a.Balance).Returns(150000);
+            _symbolMock.SetupGet(s => s.TickSize).Returns(0.25);
+            _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5.0);
+            _settingsMock.SetupGet(s => s.AverageSlippageTicks).Returns(2.0);
+
+            var posMock = new Mock<IPosition>();
+            posMock.SetupGet(p => p.Symbol).Returns(_symbolMock.Object);
+            posMock.SetupGet(p => p.Side).Returns(Side.Sell);
+            posMock.SetupGet(p => p.Quantity).Returns(2);
+            posMock.SetupGet(p => p.OpenPrice).Returns(5000.0);
+            posMock.SetupGet(p => p.Account).Returns(_accountMock.Object);
+
+            var orderMock = new Mock<IOrder>();
+            orderMock.SetupGet(o => o.Symbol).Returns(_symbolMock.Object);
+            orderMock.SetupGet(o => o.Side).Returns(Side.Buy); // buy stop closes a short
+            orderMock.SetupGet(o => o.OrderTypeId).Returns(OrderType.Stop);
+            orderMock.SetupGet(o => o.TriggerPrice).Returns(4990.0); // 40 ticks below entry
+            orderMock.SetupGet(o => o.Price).Returns(0.0);
+            orderMock.SetupGet(o => o.TotalQuantity).Returns(2);
+            orderMock.SetupGet(o => o.Status).Returns(OrderStatus.Opened);
+
+            var metrics = CreateMetrics(positions: [posMock.Object], orders: [orderMock.Object]);
+            var result = metrics.GetAccountMetrics();
+
+            Assert.Equal(20.50, result.AbsoluteValueAtRisk ?? 0.0, precision: 2);
+            Assert.Equal(20.50 / 45.0, result.RelativeValueAtRiskPercent ?? 0.0, precision: 4);
+        }
+
+        [Fact]
         public void ValueAtRisk_BreakevenStop_UsesSlippageAndCommissionOnly()
         {
             // Breakeven stop (stop moved to entry price) is a normal scenario — zero price distance,
@@ -391,11 +459,27 @@ namespace AutoSizeStrategy.Test
         #endregion
 
         [Fact]
+        public void GetCostPerContract_ActualStopBelowMinimum_UseActualStop_NotFloored()
+        {
+            // MinimumStopLossTicks is mocked to 64 in constructor; actual stop = 20 ticks.
+            // Old code floored to 64 → costPerContract = (64+1)*0.50 + 0.50 = $33.00 → ~16 trades to bust.
+            // New code uses 20 → costPerContract = (20+1)*0.50 + 0.50 = $11.00 → more trades to bust.
+            var metrics = CreateMetrics(symbol: _symbolMock.Object, stopDistanceTicks: 20);
+
+            var result = metrics.GetAccountMetrics();
+
+            // With 20-tick stop: costPerContract = (20+1)*$0.50 + $0.50 = $11.00 → 15 trades to bust.
+            // With floored 64-tick stop: costPerContract = $33.00 → 16 trades to bust.
+            // Different result proves the floor is removed.
+            Assert.Equal(15, result.TradesToBust);
+        }
+
+        [Fact]
         public void GetAccountMetrics_ZeroStopDistance_ReturnsNullTrades()
         {
             // LastStopDistanceTicks = 0 means no SL has been configured yet — can't size.
             // MinimumStopLossTicks = 0 removes the usual floor (e.g. hand-edited settings XML).
-            _settingsMock.SetupGet(s => s.MinimumStopLossTicks).Returns(0);
+            _settingsMock.SetupGet(s => s.InitialStopLossTicks).Returns(0);
 
             var metrics = CreateMetrics(symbol: _symbolMock.Object);
             metrics.LastStopDistanceTicks = 0;

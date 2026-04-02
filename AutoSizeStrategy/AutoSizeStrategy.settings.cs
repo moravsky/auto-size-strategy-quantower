@@ -16,7 +16,7 @@ namespace AutoSizeStrategy
             MissingStopLossAction.Reject;
 
         public double MinAccountBalanceOverride { get; set; }
-        public int MinimumStopLossTicks { get; set; } = 20;
+        public int InitialStopLossTicks { get; set; } = 20;
         public double CommissionMicro { get; set; } = 0.25;
         public double CommissionMini { get; set; } = 2.5;
         public double AverageSlippageTicks { get; set; } = 1.5;
@@ -216,20 +216,20 @@ namespace AutoSizeStrategy
 
         private void InitializeAccountLongevityGroup()
         {
-            var stopLossSetting = new SettingItemInteger("Initial Stop Loss Ticks", this.MinimumStopLossTicks)
+            var initialStopLossSetting = new SettingItemInteger("Initial Stop Loss Ticks", this.InitialStopLossTicks)
             {
                 Minimum = 1,
                 Increment = 1,
                 Description = """
-                              Minimum stop distance used for metrics calculations before your first trade.
+                              Stop distance used for metrics calculations before your first trade.
 
                               No stop order is placed by this setting — it is used only to estimate
                               trades-to-bust and similar metrics at startup. Once you place a real order
                               with a stop loss, your stop distance is used instead.
                               """,
             };
-            stopLossSetting.PropertyChanged += (_, _) =>
-                this.MinimumStopLossTicks = (int)stopLossSetting.Value;
+            initialStopLossSetting.PropertyChanged += (_, _) =>
+                this.InitialStopLossTicks = (int)initialStopLossSetting.Value;
 
             var slippageSetting = new SettingItemDouble(
                 "Average Slippage Ticks",
@@ -318,7 +318,7 @@ namespace AutoSizeStrategy
                 new SettingItemGroup(
                     "Account Longevity",
                     [
-                        stopLossSetting,
+                        initialStopLossSetting,
                         clutchModeBudgetSetting,
                         clutchModeRiskSequenceSetting,
                     ]
