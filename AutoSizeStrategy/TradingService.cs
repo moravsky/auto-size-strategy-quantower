@@ -244,7 +244,12 @@ namespace AutoSizeStrategy
 
         public void ReportCancelledOrder(string orderId) => _pendingCancels.TryRemove(orderId);
 
-        public void ReportPlacedOrder(long requestId) => _pendingPlacements.TryRemove(requestId);
+        public void ReportPlacedOrder(long requestId)
+        {
+            bool removed = _pendingPlacements.TryRemove(requestId);
+            if (removed)
+                logger.LogInfo($"ReportPlacedOrder: removed {requestId} from pendingPlacements");
+        }
 
         public void Dispose()
         {

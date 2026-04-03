@@ -749,6 +749,24 @@ namespace AutoSizeStrategy.Test
             _loggerMock.Verify(l => l.LogInfo(It.Is<string>(s => s.Contains("Capping calculatedSize"))), Times.Once);
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void ReportCompletedRequest_OnlyReportsPlacedOrder_OnSuccess(bool success)
+        {
+            var placeParams = new PlaceOrderRequestParameters();
+            object result = success
+                ? TradingOperationResult.CreateSuccess(placeParams.RequestId, "ok")
+                : TradingOperationResult.CreateError(placeParams.RequestId, "bad input");
+
+            _engine.ReportCompletedRequest(placeParams, result);
+
+            _serviceMock.Verify(
+                s => s.ReportPlacedOrder(placeParams.RequestId),
+                success ? Times.Once() : Times.Never()
+            );
+        }
+
         #endregion
 
         #region Helpers ---------------------------------------------------

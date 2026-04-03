@@ -189,11 +189,11 @@ namespace AutoSizeStrategy
             }
         }
 
-        private void CoreNewPerformedRequest(object sender, RequestEventArgs e)
+        private void CoreNewPerformedRequest(object sender, PerformedRequestEventArgs e)
         {
             try
             {
-                _strategyEngine.ReportCompletedRequest(e.RequestParameters);
+                _strategyEngine.ReportCompletedRequest(e.RequestParameters, e.RequestResult);
             }
             catch (Exception ex)
             {

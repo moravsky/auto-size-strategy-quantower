@@ -276,9 +276,10 @@ namespace AutoSizeStrategy
                 orderRequestParameters.Quantity = finalQuantity;
             }
         }
-        public void ReportCompletedRequest(RequestParameters requestParameters)
+        public void ReportCompletedRequest(RequestParameters requestParameters, object requestResult)
         {
-            if (requestParameters is PlaceOrderRequestParameters placeOrderRequestParameters)
+            if (requestParameters is PlaceOrderRequestParameters placeOrderRequestParameters
+                && requestResult is TradingOperationResult { Status: TradingOperationResultStatus.Success })
             {
                 context.TradingService.ReportPlacedOrder(placeOrderRequestParameters.RequestId);
             }
