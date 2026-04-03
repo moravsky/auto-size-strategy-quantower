@@ -68,6 +68,8 @@ namespace AutoSizeStrategy
             )
                 return false;
 
+            logger.LogVerbose($"Place {parameters.RequestId}: tracked in pendingPlacements");
+
             // Fire-and-forget the background retry loop to unblock the caller
             _ = ExecuteWithRetryAsync(
                 "PlaceRequest",
@@ -136,18 +138,33 @@ namespace AutoSizeStrategy
                 {
                     try
                     {
+                        logger.LogVerbose($"CancelReplace[{originalOrder.Id}]: starting cancel phase");
+
                         if (!Cancel(originalOrder, useLeadingJitter: false))
+                        {
+                            logger.LogVerbose($"CancelReplace[{originalOrder.Id}]: Cancel() returned false, aborting");
                             return;
+                        }
 
                         bool confirmed = await _pendingCancels.WaitAsync(
                             originalOrder.Id,
                             tradingServiceSettings.CancelWaitMs
                         );
+
+                        logger.LogVerbose(
+                            $"CancelReplace[{originalOrder.Id}]: cancel confirmed={confirmed} " +
+                            $"orderStatus={originalOrder.Status}"
+                        );
+
                         if (
                             newParams.Quantity > MathUtil.Epsilon
                             && (confirmed || originalOrder.Status == OrderStatus.Cancelled)
                         )
                         {
+                            logger.LogVerbose(
+                                $"CancelReplace[{originalOrder.Id}]: placing replacement " +
+                                $"reqId={newParams.RequestId} qty={newParams.Quantity}"
+                            );
                             Place(newParams, useLeadingJitter: false);
                         }
                         else
@@ -179,7 +196,7 @@ namespace AutoSizeStrategy
             {
                 if (shouldContinue != null && !shouldContinue())
                 {
-                    logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
+                    logger.LogVerbose($"{name} {id} aborted pre-jitter (iteration={i})");
                     return TradingOperationResult.CreateSuccess(0, id);
                 }
 
@@ -199,13 +216,17 @@ namespace AutoSizeStrategy
                     // Double-check after the jitter
                     if (shouldContinue != null && !shouldContinue())
                     {
-                        logger.LogInfo($"{name} {id} aborted - operation finalized elsewhere");
+                        logger.LogVerbose($"{name} {id} aborted post-jitter (iteration={i})");
                         return TradingOperationResult.CreateSuccess(0, id);
                     }
 
                     var res = await op();
                     if (res?.Status == TradingOperationResultStatus.Success)
                         return res;
+
+                    logger.LogVerbose(
+                        $"{name} {id} iteration={i} non-success: status={res?.Status} text={res?.Message}"
+                    );
                 }
                 catch (Exception ex)
                 {
@@ -248,7 +269,7 @@ namespace AutoSizeStrategy
         {
             bool removed = _pendingPlacements.TryRemove(requestId);
             if (removed)
-                logger.LogInfo($"ReportPlacedOrder: removed {requestId} from pendingPlacements");
+                logger.LogVerbose($"ReportPlacedOrder: removed {requestId} from pendingPlacements");
         }
 
         public void Dispose()

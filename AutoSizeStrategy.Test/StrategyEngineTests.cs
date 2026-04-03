@@ -38,6 +38,7 @@ namespace AutoSizeStrategy.Test
             _settingsMock.SetupGet(s => s.MaxContractsMicro).Returns(0);
             _settingsMock.SetupGet(s => s.MaxContractsMini).Returns(0);
             _settingsMock.SetupGet(s => s.DrawdownMode).Returns(DrawdownMode.Static);
+            _settingsMock.SetupGet(s => s.LoggingLevel).Returns(LoggingLevel.Verbose);
             _settingsMock.SetupGet(s => s.CommissionMicro).Returns(0.25);
             _settingsMock.SetupGet(s => s.CommissionMini).Returns(2.50);
             _settingsMock.SetupGet(s => s.AverageSlippageTicks).Returns(1.0);
@@ -354,7 +355,7 @@ namespace AutoSizeStrategy.Test
             Assert.Equal(456, request.Quantity); // passed through size
             _loggerMock.Verify(
                 l =>
-                    l.LogInfo(
+                    l.LogVerbose(
                         It.Is<string>(s =>
                             s.Contains("has already been processed - passing through unchanged")
                         )
@@ -550,7 +551,7 @@ namespace AutoSizeStrategy.Test
 
             Assert.Equal(originalQty, capturedReplacement.Quantity);
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s =>
+                l => l.LogVerbose(It.Is<string>(s =>
                     s.Contains("has already been processed"))),
                 Times.Once
             );

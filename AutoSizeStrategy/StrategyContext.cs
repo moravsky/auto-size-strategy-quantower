@@ -2,10 +2,18 @@ using System;
 
 namespace AutoSizeStrategy
 {
+    public enum LoggingLevel
+    {
+        Error,
+        Info,
+        Verbose,
+    }
+
     public interface IStrategyLogger
     {
         void LogError(string message);
         void LogInfo(string message);
+        void LogVerbose(string message);
     }
 
     public enum MissingStopLossAction
@@ -29,6 +37,7 @@ namespace AutoSizeStrategy
         int MaxContractsMicro { get; }
         int MaxContractsMini { get; }
         DrawdownMode DrawdownMode { get; }
+        LoggingLevel LoggingLevel { get; }
     }
 
     public interface IStrategyContext : IDisposable

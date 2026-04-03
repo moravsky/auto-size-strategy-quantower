@@ -25,6 +25,7 @@ namespace AutoSizeStrategy
         public int MaxContractsMicro { get; set; } = 150;
         public int MaxContractsMini { get; set; } = 15;
         public DrawdownMode DrawdownMode { get; set; } = DrawdownMode.Static;
+        public LoggingLevel LoggingLevel { get; set; } = LoggingLevel.Info;
         private string _accountId = Core.Accounts.FindTargetAccount()?.Id;
         private readonly List<SettingItem> _additionalSettings = [];
 
@@ -50,9 +51,42 @@ namespace AutoSizeStrategy
 
         private void InitializeSettings()
         {
+            InitializeBaseSettings();
             InitializeRiskManagementGroup();
             InitializeAccountLongevityGroup();
             InitializeExecutionCostsGroup();
+        }
+
+        private void InitializeBaseSettings()
+        {
+            var loggingLevelVariants = new List<SelectItem>
+            {
+                new("Error", LoggingLevel.Error),
+                new("Info", LoggingLevel.Info),
+                new("Verbose", LoggingLevel.Verbose),
+            };
+
+            var loggingLevelSetting = new SettingItemSelectorLocalized(
+                "Logging Level",
+                loggingLevelVariants.First(v => (LoggingLevel)v.Value == LoggingLevel),
+                loggingLevelVariants
+            )
+            {
+                Description = """
+                              Controls the verbosity of strategy log output.
+
+                              Error: Only errors.
+                              Info: Errors + strategy actions (sizing, resizing, exits).
+                              Verbose: All of the above + diagnostic details for debugging.
+                              """,
+            };
+            loggingLevelSetting.PropertyChanged += (_, _) =>
+            {
+                if (loggingLevelSetting.Value is SelectItem si)
+                    this.LoggingLevel = (LoggingLevel)si.Value;
+            };
+
+            _additionalSettings.Add(loggingLevelSetting);
         }
 
         private void InitializeRiskManagementGroup()

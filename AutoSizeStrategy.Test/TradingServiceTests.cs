@@ -209,7 +209,7 @@ namespace AutoSizeStrategy.Test
             statusSetup.Returns(OrderStatus.Cancelled);
 
             _loggerMock
-                .Setup(l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))))
+                .Setup(l => l.LogVerbose(It.Is<string>(s => s.Contains("aborted"))))
                 .Callback(tcs.SetResult);
 
             _service.Cancel(orderMock.Object, useLeadingJitter: true);
@@ -217,7 +217,7 @@ namespace AutoSizeStrategy.Test
             await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))),
+                l => l.LogVerbose(It.Is<string>(s => s.Contains("aborted"))),
                 Times.Once
             );
             orderMock.Verify(o => o.Cancel(), Times.Never);
@@ -232,7 +232,7 @@ namespace AutoSizeStrategy.Test
 
             var tcs = new TaskCompletionSource();
             _loggerMock
-                .Setup(l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))))
+                .Setup(l => l.LogVerbose(It.Is<string>(s => s.Contains("aborted"))))
                 .Callback(tcs.SetResult);
 
             // Simulate the platform event
@@ -246,7 +246,7 @@ namespace AutoSizeStrategy.Test
             orderMock.Verify(o => o.Cancel(), Times.Never);
 
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))),
+                l => l.LogVerbose(It.Is<string>(s => s.Contains("aborted"))),
                 Times.Once
             );
         }
@@ -266,7 +266,7 @@ namespace AutoSizeStrategy.Test
 
             requestMock.Verify(r => r.Send(), Times.Never);
             _loggerMock.Verify(
-                l => l.LogInfo(It.Is<string>(s => s.Contains("aborted"))),
+                l => l.LogVerbose(It.Is<string>(s => s.Contains("aborted"))),
                 Times.Once
             );
         }

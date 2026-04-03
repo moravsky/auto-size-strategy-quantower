@@ -19,6 +19,11 @@ namespace AutoSizeStrategy
             if (requestParameters is not IOrderRequestParameters orderRequestParameters)
                 return;
 
+            context.Logger.LogVerbose(
+                $"ProcessRequest entry: type={requestParameters.GetType().Name} reqId={orderRequestParameters.RequestId} " +
+                $"symbol={orderRequestParameters.Symbol.Name} side={orderRequestParameters.Side}"
+            );
+
             if (!PerformInitialValidations(orderRequestParameters))
                 return;
 
@@ -79,7 +84,7 @@ namespace AutoSizeStrategy
             // Idempotency check
             if (!_processedRequests.TryTrack(orderRequestParameters.RequestId))
             {
-                context.Logger.LogInfo(
+                context.Logger.LogVerbose(
                     $"Order request {orderRequestParameters.RequestId} has already been processed - passing through unchanged"
                 );
                 return false;
@@ -113,9 +118,15 @@ namespace AutoSizeStrategy
             calculatedSize = ApplyMaxContractsCap(calculatedSize, orderRequestParameters.Symbol);
 
             // Adjust for current net position
-            int remainingCapacity = orderRequestParameters.Side.IsExitDirection(netPosition)
+            bool isReversal = orderRequestParameters.Side.IsExitDirection(netPosition);
+            int remainingCapacity = isReversal
                 ? (int)Math.Abs(netPosition) + calculatedSize
                 : calculatedSize - (int)Math.Abs(netPosition);
+
+            context.Logger.LogVerbose(
+                $"Position adjustment: netPos={netPosition} calculatedSize={calculatedSize} " +
+                $"isReversal={isReversal} remainingCapacity={remainingCapacity}"
+            );
 
             if (remainingCapacity <= 0)
             {
@@ -190,7 +201,7 @@ namespace AutoSizeStrategy
             );
 
             context.Logger.LogInfo(
-                $"[{symbol.Name}] cost per contract: {costPerContract:F2} ({stopDistanceTicks}T stop + {slippageTicks}T slip + ${roundTripCommission:F2} comm)"
+                $"[{symbol.Name}] cost per contract: {costPerContract:F2}, ({stopDistanceTicks}T stop + {slippageTicks}T slip) * {tickValue} tickValue + ${roundTripCommission:F2} comm"
             );
 
             return RiskCalculator.CalculatePositionSize(
@@ -246,6 +257,9 @@ namespace AutoSizeStrategy
                         $"to {finalQuantity} via Cancel/Replace."
                     );
                     var replacementParams = IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, finalQuantity);
+                    context.Logger.LogVerbose(
+                        $"Replacement reqId={replacementParams.RequestId} for order {modifyOrderRequestParameters.OrderId}"
+                    );
                     // Mark as processed so ProcessRequest dosen't re-intercept
                     _processedRequests.TryTrack(replacementParams.RequestId);
                     context.TradingService.CancelReplace(

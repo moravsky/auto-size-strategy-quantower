@@ -193,7 +193,9 @@ namespace AutoSizeStrategy
         {
             try
             {
-                _strategyEngine.ReportCompletedRequest(e.RequestParameters, e.RequestResult);
+                var rp = e.RequestParameters;
+                LogVerbose($"CoreNewPerformedRequest: type={rp.GetType().Name} reqId={rp.RequestId}");
+                _strategyEngine.ReportCompletedRequest(rp, e.RequestResult);
             }
             catch (Exception ex)
             {
@@ -259,6 +261,16 @@ namespace AutoSizeStrategy
 
         public void LogError(string message) => Log(message, StrategyLoggingLevel.Error);
 
-        public void LogInfo(string message) => Log(message);
+        public void LogInfo(string message)
+        {
+            if (LoggingLevel >= LoggingLevel.Info)
+                Log(message);
+        }
+
+        public void LogVerbose(string message)
+        {
+            if (LoggingLevel >= LoggingLevel.Verbose)
+                Log(message);
+        }
     }
 }
