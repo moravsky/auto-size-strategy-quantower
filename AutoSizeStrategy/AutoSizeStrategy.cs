@@ -30,6 +30,7 @@ namespace AutoSizeStrategy
         private double _mRelativeValueAtRisk = double.NaN;
         private readonly object _metricsLock = new();
         private const int HeartbeatPeriodMs = 1000;
+        private AccountMetrics _lastMetrics;
 
         public AutoSizeStrategy()
         {
@@ -163,6 +164,18 @@ namespace AutoSizeStrategy
 
                     var m = _metrics.GetAccountMetrics();
 
+                    if (m != _lastMetrics)
+                    {
+                        LogVerbose(
+                            $"Metrics: riskCapital={m.RiskCapital?.ToString("F2") ?? "N/A"} " +
+                            $"tradesToClutch={m.TradesToClutchMode?.ToString() ?? "N/A"} " +
+                            $"tradesToBust={m.TradesToBust?.ToString() ?? "N/A"} " +
+                            $"absVaR={m.AbsoluteValueAtRisk?.ToString("F2") ?? "N/A"} " +
+                            $"relVaR={m.RelativeValueAtRiskPercent?.ToString("F1") ?? "N/A"}%"
+                        );
+                        _lastMetrics = m;
+                    }
+
                     Volatile.Write(ref _mRiskCapital, m.RiskCapital ?? double.NaN);
                     Volatile.Write(ref _mTradesToClutch, m.TradesToClutchMode ?? double.NaN);
                     Volatile.Write(ref _mTradesToBust, m.TradesToBust ?? double.NaN);
@@ -239,6 +252,7 @@ namespace AutoSizeStrategy
             _strategyEngine?.Dispose();
             _strategyEngine = null;
             _metrics = null;
+            _lastMetrics = null;
         }
 
         protected override void OnRemove() => Dispose();
