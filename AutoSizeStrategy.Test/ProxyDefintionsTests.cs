@@ -1,6 +1,6 @@
-using System.Runtime.CompilerServices;
 using Moq;
 using TradingPlatform.BusinessLayer;
+using static AutoSizeStrategy.Test.SdkTestHelpers;
 
 namespace AutoSizeStrategy.Test
 {
@@ -40,36 +40,27 @@ namespace AutoSizeStrategy.Test
         [Fact]
         public void FromModify_TransfersModifyData_Correctly()
         {
-            var accMock = new Mock<IAccount>();
-            accMock.SetupGet(a => a.Id).Returns("RealAcc123");
+            var account = CreateFakeAccount(balance: 150_000);
 
-            var symMock = new Mock<ISymbol>();
-            symMock.SetupGet(s => s.Id).Returns("MES");
-
-            var modifyMock = new Mock<IModifyOrderRequestParameters>();
-            modifyMock.SetupGet(m => m.Account).Returns(accMock.Object);
-            modifyMock.SetupGet(m => m.Symbol).Returns(symMock.Object);
-            modifyMock.SetupGet(m => m.Side).Returns(Side.Buy);
-            modifyMock.SetupGet(m => m.Price).Returns(5000.0);
-            modifyMock.SetupGet(m => m.OrderTypeId).Returns(OrderType.Limit);
-            modifyMock.SetupGet(m => m.TimeInForce).Returns(TimeInForce.GTC);
-
-            var stopLossItems = new List<SlTpHolder>()
+            var sdkModify = new ModifyOrderRequestParameters
             {
-                SlTpHolder.CreateSL(4995),
-                SlTpHolder.CreateSL(40, PriceMeasurement.Offset),
+                Account = account,
+                Side = Side.Buy,
+                Price = 5000.0,
+                OrderTypeId = OrderType.Limit,
+                TimeInForce = TimeInForce.GTC,
+                Comment = "test-comment",
+                Slippage = 3,
             };
-            modifyMock.SetupGet(m => m.StopLossItems).Returns(stopLossItems);
+            sdkModify.StopLossItems.Add(SlTpHolder.CreateSL(4995));
+            sdkModify.StopLossItems.Add(SlTpHolder.CreateSL(40, PriceMeasurement.Offset));
+            sdkModify.TakeProfitItems.Add(SlTpHolder.CreateTP(5005));
+            sdkModify.TakeProfitItems.Add(SlTpHolder.CreateTP(40, PriceMeasurement.Offset));
 
-            var takeProfitItems = new List<SlTpHolder>()
-            {
-                SlTpHolder.CreateTP(5005),
-                SlTpHolder.CreateTP(40, PriceMeasurement.Offset),
-            };
-            modifyMock.SetupGet(m => m.TakeProfitItems).Returns(takeProfitItems);
+            var modify = new ModifyOrderRequestParametersWrapper(sdkModify);
 
             var result =
-                IPlaceOrderRequestParameters.FromModify(modifyMock.Object, 5.0)
+                IPlaceOrderRequestParameters.FromModify(modify, 5.0)
                 as PlaceOrderRequestParametersWrapper;
             Assert.NotNull(result);
 
@@ -78,17 +69,13 @@ namespace AutoSizeStrategy.Test
             Assert.Equal(5000.0, result.Price);
             Assert.Equal(5.0, result.Quantity);
             Assert.Equal(OrderType.Limit, result.OrderTypeId);
-            Assert.Same(accMock.Object, result.Account);
-            Assert.Same(symMock.Object, result.Symbol);
-            Assert.Equal(stopLossItems, result.StopLossItems);
-            Assert.Equal(takeProfitItems, result.TakeProfitItems);
-
-            Assert.Equal(Side.Buy, result.Inner.Side);
-            Assert.Equal(5000.0, result.Inner.Price);
-            Assert.Equal(5.0, result.Inner.Quantity);
-            Assert.Equal("Limit", result.Inner.OrderTypeId);
             Assert.Equal(TimeInForce.GTC, result.TimeInForce);
-            Assert.Equal(TimeInForce.GTC, result.Inner.TimeInForce);
+            Assert.Equal("test-comment", result.Inner.Comment);
+            Assert.Equal(3, result.Inner.Slippage);
+            Assert.Equal(2, result.Inner.StopLossItems.Count);
+            Assert.Equal(2, result.Inner.TakeProfitItems.Count);
+            Assert.Equal(5.0, result.Inner.StopLossItems[0].Quantity);
+            Assert.Equal(5.0, result.Inner.TakeProfitItems[0].Quantity);
         }
 
         [Fact]
@@ -106,19 +93,10 @@ namespace AutoSizeStrategy.Test
             Assert.Equal(5, wrapper.Inner.StopLossItems[0].Quantity);
         }
 
-        private static Account CreateFakeAccount(double balance)
-        {
-            var account = (Account)RuntimeHelpers.GetUninitializedObject(typeof(Account));
-
-            typeof(Account).GetProperty("Balance")!.SetValue(account, balance);
-
-            return account;
-        }
-
         [Fact]
         public void Balance_DelegatesToSdkAccount_NotCachedAtConstruction()
         {
-            var account = CreateFakeAccount(150_000);
+            var account = CreateFakeAccount(balance: 150_000);
             var wrapper = new AccountWrapper(account);
 
             Assert.Equal(150_000, wrapper.Balance);

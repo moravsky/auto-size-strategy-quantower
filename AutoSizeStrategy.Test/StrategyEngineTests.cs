@@ -1,5 +1,6 @@
 ﻿using Moq;
 using TradingPlatform.BusinessLayer;
+using static AutoSizeStrategy.Test.SdkTestHelpers;
 
 namespace AutoSizeStrategy.Test
 {
@@ -58,6 +59,37 @@ namespace AutoSizeStrategy.Test
             _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(5); // $5/tick
 
             _engine = new StrategyEngine(_contextMock.Object);
+        }
+
+        private ModifyOrderRequestParametersWrapper CreateModifyWrapper(
+            string accountId,
+            double balance,
+            string orderId,
+            double quantity,
+            List<SlTpHolder>? stopLossItems = null,
+            List<SlTpHolder>? takeProfitItems = null
+        )
+        {
+            // Match the settings mock's account ID so the engine's validation passes
+            _accountMock.SetupGet(a => a.Id).Returns(accountId);
+
+            var sdkModify = new ModifyOrderRequestParameters
+            {
+                Account = CreateFakeAccount(accountId, balance),
+                Symbol = CreateFakeSymbol("MES@CME", "MES", tickSize: 0.25, tickCost: 5.0, last: 5000.0),
+                Side = Side.Buy,
+                Price = 5000.0,
+                OrderTypeId = OrderType.Limit,
+                OrderId = orderId,
+                Quantity = quantity,
+            };
+
+            if (stopLossItems != null)
+                sdkModify.StopLossItems.AddRange(stopLossItems);
+            if (takeProfitItems != null)
+                sdkModify.TakeProfitItems.AddRange(takeProfitItems);
+
+            return new ModifyOrderRequestParametersWrapper(sdkModify);
         }
 
         #region Drawdown Logic Tests (Intraday vs EOD vs Static)
@@ -459,24 +491,11 @@ namespace AutoSizeStrategy.Test
         [Fact]
         public void ProcessRequest_ModifyOrder_CalculatesRiskCorrectly()
         {
-            _accountMock.SetupGet(a => a.Id).Returns("Static");
-            var requestMock = new Mock<IModifyOrderRequestParameters>();
-
-            requestMock.SetupGet(r => r.RequestId).Returns(12345);
-            requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
-            requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
-            requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
-            requestMock.SetupGet(r => r.OrderId).Returns("order67");
-            requestMock.SetupGet(r => r.OrderTypeId).Returns(OrderType.Limit);
-
-            var slList = new List<SlTpHolder> { SlTpHolder.CreateSL(20, PriceMeasurement.Offset) };
-            requestMock.SetupGet(r => r.StopLossItems).Returns(slList);
-
-            var tpList = new List<SlTpHolder> { SlTpHolder.CreateTP(20, PriceMeasurement.Offset) };
-            requestMock.SetupGet(r => r.TakeProfitItems).Returns(tpList);
-
-            requestMock.SetupProperty(r => r.Quantity, 100.0);
-            requestMock.SetupProperty(r => r.CancellationToken, CancellationToken.None);
+            var request = CreateModifyWrapper(
+                accountId: "Static", balance: 150_000, orderId: "order67", quantity: 100,
+                stopLossItems: [SlTpHolder.CreateSL(20, PriceMeasurement.Offset)],
+                takeProfitItems: [SlTpHolder.CreateTP(20, PriceMeasurement.Offset)]
+            );
 
             // Capture the replacement params from CancelReplace
             IPlaceOrderRequestParameters? capturedReplacement = null;
@@ -484,12 +503,12 @@ namespace AutoSizeStrategy.Test
                 .Setup(s => s.CancelReplace(It.IsAny<string>(), It.IsAny<IPlaceOrderRequestParameters>()))
                 .Callback<string, IPlaceOrderRequestParameters>((_, p) => capturedReplacement = p);
 
-            _engine.ProcessRequest(requestMock.Object);
+            _engine.ProcessRequest(request);
 
             // Original modify is suppressed: cancellation token set and quantity zeroed
             // (Quantower does not reliably respect CancellationToken alone)
-            Assert.True(requestMock.Object.CancellationToken.IsCancellationRequested);
-            Assert.Equal(0, requestMock.Object.Quantity);
+            Assert.True(request.CancellationToken.IsCancellationRequested);
+            Assert.Equal(0, request.Quantity);
 
             // CancelReplace fired on the correct order
             _serviceMock.Verify(
@@ -515,24 +534,11 @@ namespace AutoSizeStrategy.Test
         [Fact]
         public void ProcessRequest_ModifyOrder_ReplacementIsNotDoubleProcessed()
         {
-            _accountMock.SetupGet(a => a.Id).Returns("Static");
-            var requestMock = new Mock<IModifyOrderRequestParameters>();
-
-            requestMock.SetupGet(r => r.RequestId).Returns(12345);
-            requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
-            requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
-            requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
-            requestMock.SetupGet(r => r.OrderId).Returns("order67");
-            requestMock.SetupGet(r => r.OrderTypeId).Returns(OrderType.Limit);
-
-            var slList = new List<SlTpHolder> { SlTpHolder.CreateSL(20, PriceMeasurement.Offset) };
-            requestMock.SetupGet(r => r.StopLossItems).Returns(slList);
-
-            var tpList = new List<SlTpHolder> { SlTpHolder.CreateTP(20, PriceMeasurement.Offset) };
-            requestMock.SetupGet(r => r.TakeProfitItems).Returns(tpList);
-
-            requestMock.SetupProperty(r => r.Quantity, 100.0);
-            requestMock.SetupProperty(r => r.CancellationToken, CancellationToken.None);
+            var request = CreateModifyWrapper(
+                accountId: "Static", balance: 150_000, orderId: "order67", quantity: 100,
+                stopLossItems: [SlTpHolder.CreateSL(20, PriceMeasurement.Offset)],
+                takeProfitItems: [SlTpHolder.CreateTP(20, PriceMeasurement.Offset)]
+            );
 
             // Capture the replacement params from CancelReplace
             IPlaceOrderRequestParameters? capturedReplacement = null;
@@ -540,7 +546,7 @@ namespace AutoSizeStrategy.Test
                 .Setup(s => s.CancelReplace(It.IsAny<string>(), It.IsAny<IPlaceOrderRequestParameters>()))
                 .Callback<string, IPlaceOrderRequestParameters>((_, p) => capturedReplacement = p);
 
-            _engine.ProcessRequest(requestMock.Object);
+            _engine.ProcessRequest(request);
 
             Assert.NotNull(capturedReplacement);
 

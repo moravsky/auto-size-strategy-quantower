@@ -190,20 +190,12 @@ namespace AutoSizeStrategy
             double newQuantity
         )
         {
-            return new PlaceOrderRequestParametersWrapper
-            {
-                // The replacement uses SDK's autoincrement logic for RequestId
-                Account = modify.Account,
-                Symbol = modify.Symbol,
-                Side = modify.Side,
-                Price = modify.Price,
-                TriggerPrice = modify.TriggerPrice,
-                OrderTypeId = modify.OrderTypeId,
-                TimeInForce = modify.TimeInForce,
-                Quantity = newQuantity,
-                StopLossItems = modify.StopLossItems?.ToList(), // Clone the list to avoid side effects
-                TakeProfitItems = modify.TakeProfitItems?.ToList(),
-            };
+            var modifyInner = ((ModifyOrderRequestParametersWrapper)modify).Inner;
+            var place = new PlaceOrderRequestParameters();
+            place.UpdateFrom(modifyInner);
+            var wrapper = new PlaceOrderRequestParametersWrapper(place);
+            wrapper.Quantity = newQuantity;
+            return wrapper;
         }
     }
 
