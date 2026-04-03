@@ -512,6 +512,51 @@ namespace AutoSizeStrategy.Test
         }
 
         [Fact]
+        public void ProcessRequest_ModifyOrder_ReplacementIsNotDoubleProcessed()
+        {
+            _accountMock.SetupGet(a => a.Id).Returns("Static");
+            var requestMock = new Mock<IModifyOrderRequestParameters>();
+
+            requestMock.SetupGet(r => r.RequestId).Returns(12345);
+            requestMock.SetupGet(r => r.Account).Returns(_accountMock.Object);
+            requestMock.SetupGet(r => r.Symbol).Returns(_symbolMock.Object);
+            requestMock.SetupGet(r => r.Price).Returns(_symbolMock.Object.Last);
+            requestMock.SetupGet(r => r.OrderId).Returns("order67");
+            requestMock.SetupGet(r => r.OrderTypeId).Returns(OrderType.Limit);
+
+            var slList = new List<SlTpHolder> { SlTpHolder.CreateSL(20, PriceMeasurement.Offset) };
+            requestMock.SetupGet(r => r.StopLossItems).Returns(slList);
+
+            var tpList = new List<SlTpHolder> { SlTpHolder.CreateTP(20, PriceMeasurement.Offset) };
+            requestMock.SetupGet(r => r.TakeProfitItems).Returns(tpList);
+
+            requestMock.SetupProperty(r => r.Quantity, 100.0);
+            requestMock.SetupProperty(r => r.CancellationToken, CancellationToken.None);
+
+            // Capture the replacement params from CancelReplace
+            IPlaceOrderRequestParameters? capturedReplacement = null;
+            _serviceMock
+                .Setup(s => s.CancelReplace(It.IsAny<string>(), It.IsAny<IPlaceOrderRequestParameters>()))
+                .Callback<string, IPlaceOrderRequestParameters>((_, p) => capturedReplacement = p);
+
+            _engine.ProcessRequest(requestMock.Object);
+
+            Assert.NotNull(capturedReplacement);
+
+            // Simulate Core.NewRequest re-firing for the replacement order.
+            // The replacement's quantity must pass through unchanged (not re-sized).
+            double originalQty = capturedReplacement.Quantity;
+            _engine.ProcessRequest(capturedReplacement);
+
+            Assert.Equal(originalQty, capturedReplacement.Quantity);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s =>
+                    s.Contains("has already been processed"))),
+                Times.Once
+            );
+        }
+
+        [Fact]
         public void ProcessRequest_ModifyOrder_QuantityUnchanged_DoesNotCancelReplace()
         {
             _accountMock.SetupGet(a => a.Id).Returns("Static");

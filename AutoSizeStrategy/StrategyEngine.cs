@@ -245,9 +245,12 @@ namespace AutoSizeStrategy
                         $"{modifyOrderRequestParameters.OrderId} from {orderRequestParameters.Quantity} " +
                         $"to {finalQuantity} via Cancel/Replace."
                     );
+                    var replacementParams = IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, finalQuantity);
+                    // Mark as processed so ProcessRequest dosen't re-intercept
+                    _processedRequests.TryTrack(replacementParams.RequestId);
                     context.TradingService.CancelReplace(
                         modifyOrderRequestParameters.OrderId,
-                        IPlaceOrderRequestParameters.FromModify(modifyOrderRequestParameters, finalQuantity)
+                        replacementParams
                     );
                     // Quantower does not reliably respect CancellationToken — also zero out Quantity
                     // so the original Modify becomes a no-op if it reaches the exchange.
