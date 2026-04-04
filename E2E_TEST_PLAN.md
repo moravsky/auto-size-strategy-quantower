@@ -80,8 +80,8 @@ Replay and live connections behvior has subtle differences.
 
 | Done | \# | Test Case | Mechanical Steps | Expected Result |
 |------|---|-----------|------------------|-----------------|
-|<input type="checkbox"> | C1 | Exit with SL is ignored | 1. Enable SL to `64` ticks.<br>2. Place a Sell Limit order above market for Qty `2`. | Sell Limit is placed for Qty `2` (does not upsize to 3).<br>**Log:** "Passing through exit request". |
-|<input type="checkbox"> | C2 | Exit without SL is ignored | 1. Disable SL.<br>2. Place a Sell Limit order above market for Qty `1`. | Sell Limit is placed for Qty `1`.<br>**Log:** "Passing through exit request". |
+|<input type="checkbox"> | C1 | Exit with SL is ignored | 1. Enable SL to `64` ticks.<br>2. Place a Sell Limit order above market for Qty `2`. | Sell Limit is placed for Qty `2` (does not upsize to 3).<br>**Log:** "Passing through opposite side request". |
+|<input type="checkbox"> | C2 | Exit without SL is ignored | 1. Disable SL.<br>2. Place a Sell Limit order above market for Qty `1`. | Sell Limit is placed for Qty `1`.<br>**Log:** "Passing through opposite side request". |
 
 *(Clean up: Flatten positions).*
 

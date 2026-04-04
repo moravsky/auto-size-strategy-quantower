@@ -34,8 +34,8 @@ namespace AutoSizeStrategy
 
             if (orderRequestParameters.IsExitForPosition(netPosition))
             {
-                context.Logger.LogInfo(
-                    $"Passing through exit request {orderRequestParameters.RequestId} unchanged. NetPos: {netPosition}"
+                context.Logger.LogVerbose(
+                    $"Passing through opposite side request {orderRequestParameters.RequestId}. NetPos: {netPosition}"
                 );
                 return;
             }
