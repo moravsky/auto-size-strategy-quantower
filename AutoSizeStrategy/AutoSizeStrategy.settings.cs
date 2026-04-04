@@ -86,7 +86,9 @@ namespace AutoSizeStrategy
                     this.LoggingLevel = (LoggingLevel)si.Value;
             };
 
-            _additionalSettings.Add(loggingLevelSetting);
+            _additionalSettings.Add(
+                new SettingItemGroup("View", [loggingLevelSetting])
+            );
         }
 
         private void InitializeRiskManagementGroup()
