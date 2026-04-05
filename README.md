@@ -45,7 +45,13 @@ Restart Quantower.
 
 *Note: Windows Defender SmartScreen may flag the installer as an unrecognized app since it is a new, unsigned release. Click "More info" and then "Run anyway" to proceed with the installation.*
 
-**Option 2: Build from source**
+**Option 2: Manual Install (ZIP)**
+1. Download `AutoSizeStrategy-2.0.0.zip` from Releases.
+2. **Crucial:** Right-click the downloaded `.zip` -> **Properties** -> check the **Unblock** box at the bottom -> click **OK**. *(Windows silently blocks downloaded plugins by default).*
+3. Extract the contents into `C:\Quantower\Settings\Scripts\Strategies\AutoSizeStrategy`.
+4. Restart Quantower.
+
+**Option 3: Build from source**
 
 ```shell
 git clone https://github.com/moravsky/auto-size-strategy.git
