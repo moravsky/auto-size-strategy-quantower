@@ -28,6 +28,7 @@ namespace AutoSizeStrategy
         public LoggingLevel LoggingLevel { get; set; } = LoggingLevel.Info;
         private string _accountId = Core.Accounts.FindTargetAccount()?.Id;
         private readonly List<SettingItem> _additionalSettings = [];
+        private object _drawdownModeSetting;
 
         public Account CurrentAccount
         {
@@ -51,13 +52,13 @@ namespace AutoSizeStrategy
 
         private void InitializeSettings()
         {
-            InitializeBaseSettings();
+            InitializeViewGroup();
             InitializeRiskManagementGroup();
             InitializeAccountLongevityGroup();
             InitializeExecutionCostsGroup();
         }
 
-        private void InitializeBaseSettings()
+        private void InitializeViewGroup()
         {
             var loggingLevelVariants = new List<SelectItem>
             {
@@ -86,8 +87,24 @@ namespace AutoSizeStrategy
                     this.LoggingLevel = (LoggingLevel)si.Value;
             };
 
+            var accountSetting = new SettingItemAccount("Account", this.CurrentAccount);
+            accountSetting.PropertyChanged += (_, _) =>
+            {
+                CurrentAccount = accountSetting.Value as Account;
+                DrawdownMode = ((IStrategySettings)this).CurrentAccount?.InferDrawdownMode()
+                               ?? DrawdownMode.Static;
+
+                if (_drawdownModeSetting is SettingItemSelectorLocalized dms)
+                {
+                    var matchingItem = dms.Items
+                        .FirstOrDefault(v => (DrawdownMode)v.Value == DrawdownMode);
+                    if (matchingItem != null)
+                        dms.Value = matchingItem;
+                }
+            };
+
             _additionalSettings.Add(
-                new SettingItemGroup("View", [loggingLevelSetting])
+                new SettingItemGroup("View", [accountSetting, loggingLevelSetting])
             );
         }
 
@@ -128,20 +145,7 @@ namespace AutoSizeStrategy
                 if (drawdownModeSetting.Value is SelectItem si)
                     this.DrawdownMode = (DrawdownMode)si.Value;
             };
-
-            var accountSetting = new SettingItemAccount("Account", this.CurrentAccount);
-            accountSetting.PropertyChanged += (_, _) =>
-            {
-                CurrentAccount = accountSetting.Value as Account;
-                DrawdownMode = ((IStrategySettings)this).CurrentAccount?.InferDrawdownMode()
-                               ?? DrawdownMode.Static;
-
-                var matchingItem = drawdownModeVariants.FirstOrDefault(v => (DrawdownMode)v.Value == DrawdownMode);
-                if (matchingItem != null)
-                {
-                    drawdownModeSetting.Value = matchingItem;
-                }
-            };
+            _drawdownModeSetting = drawdownModeSetting;
 
             var riskPercentSetting = new SettingItemDouble("Risk Percent", this.RiskPercent)
             {
@@ -238,7 +242,6 @@ namespace AutoSizeStrategy
                 new SettingItemGroup(
                     "Risk Management",
                     [
-                        accountSetting,
                         drawdownModeSetting,
                         riskPercentSetting,
                         missingStopLossActionSetting,
