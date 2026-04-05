@@ -29,6 +29,9 @@ namespace AutoSizeStrategy
         private string _accountId = Core.Accounts.FindTargetAccount()?.Id;
         private readonly List<SettingItem> _additionalSettings = [];
         private object _drawdownModeSetting;
+        private SettingItemAccount _accountSetting;
+        private SettingItemSelectorLocalized _loggingLevelSetting;
+
 
         public Account CurrentAccount
         {
@@ -52,13 +55,13 @@ namespace AutoSizeStrategy
 
         private void InitializeSettings()
         {
-            InitializeViewGroup();
+            InitializeViewSettings();
             InitializeRiskManagementGroup();
             InitializeAccountLongevityGroup();
             InitializeExecutionCostsGroup();
         }
 
-        private void InitializeViewGroup()
+        private void InitializeViewSettings()
         {
             var loggingLevelVariants = new List<SelectItem>
             {
@@ -67,7 +70,7 @@ namespace AutoSizeStrategy
                 new("Verbose", LoggingLevel.Verbose),
             };
 
-            var loggingLevelSetting = new SettingItemSelectorLocalized(
+            _loggingLevelSetting = new SettingItemSelectorLocalized(
                 "Logging Level",
                 loggingLevelVariants.First(v => (LoggingLevel)v.Value == LoggingLevel),
                 loggingLevelVariants
@@ -81,16 +84,16 @@ namespace AutoSizeStrategy
                               Verbose: All of the above + diagnostic details for debugging.
                               """,
             };
-            loggingLevelSetting.PropertyChanged += (_, _) =>
+            _loggingLevelSetting.PropertyChanged += (_, _) =>
             {
-                if (loggingLevelSetting.Value is SelectItem si)
+                if (_loggingLevelSetting.Value is SelectItem si)
                     this.LoggingLevel = (LoggingLevel)si.Value;
             };
 
-            var accountSetting = new SettingItemAccount("Account", this.CurrentAccount);
-            accountSetting.PropertyChanged += (_, _) =>
+            _accountSetting = new SettingItemAccount("Account", this.CurrentAccount);
+            _accountSetting.PropertyChanged += (_, _) =>
             {
-                CurrentAccount = accountSetting.Value as Account;
+                CurrentAccount = _accountSetting.Value as Account;
                 DrawdownMode = ((IStrategySettings)this).CurrentAccount?.InferDrawdownMode()
                                ?? DrawdownMode.Static;
 
@@ -102,10 +105,6 @@ namespace AutoSizeStrategy
                         dms.Value = matchingItem;
                 }
             };
-
-            _additionalSettings.Add(
-                new SettingItemGroup("View", [accountSetting, loggingLevelSetting])
-            );
         }
 
         private void InitializeRiskManagementGroup()
