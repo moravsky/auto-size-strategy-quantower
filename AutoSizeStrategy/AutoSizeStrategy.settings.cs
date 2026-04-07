@@ -29,8 +29,12 @@ namespace AutoSizeStrategy
         private string _accountId = Core.Accounts.FindTargetAccount()?.Id;
         private readonly List<SettingItem> _additionalSettings = [];
         private object _drawdownModeSetting;
-        private SettingItemAccount _accountSetting;
-        private SettingItemSelectorLocalized _loggingLevelSetting;
+        // Typed as object so Quantower's reflection-based settings auto-exposure
+        // (ExecutionEntity.Settings enumerates SettingItem-typed fields and adds a
+        // GetCopy() of each) does not pick these up and break the PropertyChanged
+        // wiring on the original instance below.
+        private object _accountSetting;
+        private object _loggingLevelSetting;
 
 
         public Account CurrentAccount
@@ -38,7 +42,16 @@ namespace AutoSizeStrategy
             get => Core.Accounts.FirstOrDefault(a => a.Id == _accountId, field);
             set
             {
-                _accountId = value?.Id;
+                if (value == null)
+                {
+                    // Preserve _accountId as the stable identifier so the getter can
+                    // re-resolve after Core.Accounts churn. A transient null write
+                    // (e.g. during a settings round-trip before accounts are loaded)
+                    // must not erase the user's selection.
+                    field = null;
+                    return;
+                }
+                _accountId = value.Id;
                 field = value;
             }
         }
@@ -70,7 +83,7 @@ namespace AutoSizeStrategy
                 new("Verbose", LoggingLevel.Verbose),
             };
 
-            _loggingLevelSetting = new SettingItemSelectorLocalized(
+            var loggingLevelSetting = new SettingItemSelectorLocalized(
                 "Logging Level",
                 loggingLevelVariants.First(v => (LoggingLevel)v.Value == LoggingLevel),
                 loggingLevelVariants
@@ -84,16 +97,17 @@ namespace AutoSizeStrategy
                               Verbose: All of the above + diagnostic details for debugging.
                               """,
             };
-            _loggingLevelSetting.PropertyChanged += (_, _) =>
+            loggingLevelSetting.PropertyChanged += (_, _) =>
             {
-                if (_loggingLevelSetting.Value is SelectItem si)
+                if (loggingLevelSetting.Value is SelectItem si)
                     this.LoggingLevel = (LoggingLevel)si.Value;
             };
+            _loggingLevelSetting = loggingLevelSetting;
 
-            _accountSetting = new SettingItemAccount("Account", this.CurrentAccount);
-            _accountSetting.PropertyChanged += (_, _) =>
+            var accountSetting = new SettingItemAccount("Account", this.CurrentAccount);
+            accountSetting.PropertyChanged += (_, _) =>
             {
-                CurrentAccount = _accountSetting.Value as Account;
+                CurrentAccount = accountSetting.Value as Account;
                 DrawdownMode = ((IStrategySettings)this).CurrentAccount?.InferDrawdownMode()
                                ?? DrawdownMode.Static;
 
@@ -105,6 +119,11 @@ namespace AutoSizeStrategy
                         dms.Value = matchingItem;
                 }
             };
+            _accountSetting = accountSetting;
+
+            _additionalSettings.Add(
+                new SettingItemGroup("View", [accountSetting, loggingLevelSetting])
+            );
         }
 
         private void InitializeRiskManagementGroup()
