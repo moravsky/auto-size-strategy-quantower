@@ -44,6 +44,8 @@ Replay and live connections behvior has subtle differences.
   * Risk Budget ($225) / $65.25 = 3.44
   * **Base Target Size = 3 contracts**
 
+> **Note on integer expected values:** Hand-calculated expected quantities below assume an *exact* $150,000 balance. Successful trades earlier in the session nudge the balance up, which grows the risk budget and can shift floor() answers by +/-1. If your log disagrees with the table by 1 contract, recompute from first principles using the `position risk:` value in the log line: expected qty = floor(positionRisk / costPerContract). Either accept the recomputed value, or reset Market Replay to restore the $150,000 starting balance before re-running the suite.
+
 -----
 
 ## Phase 1: Reject Mode (5%, No Caps)
@@ -166,7 +168,7 @@ Replay and live connections behvior has subtle differences.
 
 ### Test Suite G: Max Contracts Cap
 
-*Pre-condition: Net Position is 0. Base Size is **13 contracts** ($900/$65.25).*
+*Pre-condition: Net Position is 0. Base Size at exact $150k balance is **13 contracts** ($900/$65.25); subject to the same balance-drift caveat as Phase 1 -- the cap-to-5 outcome is unaffected, but the pre-cap "from N" number in the log will reflect the actual budget at test time.*
 
 | Done | Test Case | Mechanical Steps | Expected Result |
 |------|-----------|------------------|-----------------|
@@ -185,7 +187,7 @@ Replay and live connections behvior has subtle differences.
 
 | Done | Test Case | Mechanical Steps | Expected Result |
 |------|-----------|------------------|-----------------|
-|<input type="checkbox"> | Risk too big for 1 contract | 1. Place Buy Limit Qty `1` with `128`-tick SL (Budget = $4.50, Cost = $65.25). | Order flashes and cancels.<br>**Log:** "Risk too big even for 1 contract". |
+|<input type="checkbox"> | Risk too big for 1 contract | 1. Place Buy Limit Qty `1` with `128`-tick SL (Budget = $4.50, Cost = $65.25). | Order flashes and cancels.<br>**Log:** "Insufficient risk budget for this stop loss distance". |
 |<input type="checkbox"> | Hand-check sizing math | 1. Stop Strategy. Pick a Risk Percent between `2%` and `10%`. Start Strategy.<br>2. Pick two stop losses between `50` and `200` ticks that straddle a size boundary.<br>3. Calculate expected size for each by hand.<br>4. Place both orders and verify quantities match. | Your manual calculation must match the strategy output. |
 
 -----
