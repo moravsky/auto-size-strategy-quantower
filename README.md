@@ -39,7 +39,7 @@ A Quantower order-placing strategy that automatically sizes every order to your 
 
 **Option 1: Installer (recommended)**
 
-Download `AutoSizeStrategy-Setup-x.x.x.exe` from [Releases](https://github.com/moravsky/auto-size-strategy/releases). 
+Download `AutoSizeStrategy-Setup-x.x.x.exe` from [Releases](https://github.com/moravsky/auto-size-strategy-quantower/releases). 
 Run the installer - it auto-detects your Quantower installation path.
 Restart Quantower.
 
@@ -54,7 +54,7 @@ Restart Quantower.
 **Option 3: Build from source**
 
 ```shell
-git clone https://github.com/moravsky/auto-size-strategy.git
+git clone https://github.com/moravsky/auto-size-strategy-quantower.git
 cd auto-size-strategy
 .\deploy.ps1 -Config Release
 ```
@@ -153,4 +153,4 @@ When AutoSizeStrategy resizes an order via Cancel/Replace, a brief red warning (
 
 **Petr Moravsky** ([petr@structuredtrading.co](mailto:petr@structuredtrading.co)) — futures trader and developer.
 
-If AutoSizeStrategy helped you pass an eval, size live trades, or served as a reference for your own development — [star the repo](https://github.com/moravsky/auto-size-strategy) and [leave a tip](https://ko-fi.com/moravsky).
+If AutoSizeStrategy helped you pass an eval, size live trades, or served as a reference for your own development — [star the repo](https://github.com/moravsky/auto-size-strategy-quantower) and [leave a tip](https://ko-fi.com/moravsky).
