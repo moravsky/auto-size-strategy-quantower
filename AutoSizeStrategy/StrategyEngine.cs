@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 using TradingPlatform.BusinessLayer;
 
 namespace AutoSizeStrategy
@@ -8,16 +7,16 @@ namespace AutoSizeStrategy
     {
         private readonly TrackingSet<long> _processedRequests = new();
 
-        public void ProcessRequest(RequestParameters requestParameters)
+        public bool ProcessRequest(RequestParameters requestParameters)
         {
             var wrapper = RequestParametersWrapper.Create(requestParameters);
-            ProcessRequest(wrapper);
+            return ProcessRequest(wrapper);
         }
 
-        public virtual void ProcessRequest(IRequestParameters requestParameters)
+        public virtual bool ProcessRequest(IRequestParameters requestParameters)
         {
             if (requestParameters is not IOrderRequestParameters orderRequestParameters)
-                return;
+                return false;
 
             context.Logger.LogVerbose(
                 $"ProcessRequest entry: type={requestParameters.GetType().Name} reqId={orderRequestParameters.RequestId} " +
@@ -25,7 +24,7 @@ namespace AutoSizeStrategy
             );
 
             if (!PerformInitialValidations(orderRequestParameters))
-                return;
+                return false;
 
             double netPosition = context.TradingService.GetNetPositionQuantity(
                 orderRequestParameters.Account,
@@ -37,15 +36,14 @@ namespace AutoSizeStrategy
                 context.Logger.LogVerbose(
                     $"Passing through opposite side request {orderRequestParameters.RequestId}. NetPos: {netPosition}"
                 );
-                return;
+                return false;
             }
 
             bool hasStopLoss = orderRequestParameters.StopLossItems?.Count > 0;
             if (!hasStopLoss && context.Settings.MissingStopLossAction == MissingStopLossAction.Reject)
             {
                 context.Logger.LogInfo($"Order request {orderRequestParameters.RequestId} cancelled: stop loss required");
-                orderRequestParameters.Quantity = 0;
-                return;
+                return true;
             }
 
             int targetQuantity = DetermineTargetQuantity(orderRequestParameters, netPosition);
@@ -53,10 +51,10 @@ namespace AutoSizeStrategy
             if (targetQuantity <= 0)
             {
                 HandleZeroQuantity(requestParameters, orderRequestParameters);
-                return;
+                return true;
             }
 
-            ExecuteOrderUpdate(requestParameters, orderRequestParameters, targetQuantity);
+            return ExecuteOrderUpdate(requestParameters, orderRequestParameters, targetQuantity);
         }
 
         private bool PerformInitialValidations(IOrderRequestParameters orderRequestParameters)
@@ -224,8 +222,6 @@ namespace AutoSizeStrategy
             }
 
             context.Logger.LogInfo(logMessage);
-
-            orderRequestParameters.Quantity = 0;
         }
 
         private int ApplyMaxContractsCap(int calculatedSize, ISymbol symbol)
@@ -243,7 +239,7 @@ namespace AutoSizeStrategy
             return calculatedSize;
         }
 
-        private void ExecuteOrderUpdate(IRequestParameters requestParameters, IOrderRequestParameters orderRequestParameters, int finalQuantity)
+        private bool ExecuteOrderUpdate(IRequestParameters requestParameters, IOrderRequestParameters orderRequestParameters, int finalQuantity)
         {
             if (requestParameters is IModifyOrderRequestParameters modifyOrderRequestParameters)
             {
@@ -266,29 +262,27 @@ namespace AutoSizeStrategy
                         modifyOrderRequestParameters.OrderId,
                         replacementParams
                     );
-                    // Quantower does not reliably respect CancellationToken — also zero out Quantity
-                    // so the original Modify becomes a no-op if it reaches the exchange.
-                    orderRequestParameters.CancellationToken = new CancellationToken(canceled: true);
-                    orderRequestParameters.Quantity = 0;
+                    return true;
                 }
-                else
-                {
-                    // Quantity unchanged — no Cancel/Replace needed, let Quantower route natively.
-                    context.Logger.LogInfo(
-                        $"Request {modifyOrderRequestParameters.RequestId} quantity unchanged " +
-                        $"at {finalQuantity} for order {modifyOrderRequestParameters.OrderId}. " +
-                        $"SL: [{string.Join(", ", modifyOrderRequestParameters.StopLossItems)}] " +
-                        $"TP: [{string.Join(", ", modifyOrderRequestParameters.TakeProfitItems)}]"
-                    );
-                }
+
+                // Quantity unchanged — no Cancel/Replace needed, let Quantower route natively.
+                context.Logger.LogInfo(
+                    $"Request {modifyOrderRequestParameters.RequestId} quantity unchanged " +
+                    $"at {finalQuantity} for order {modifyOrderRequestParameters.OrderId}. " +
+                    $"SL: [{string.Join(", ", modifyOrderRequestParameters.StopLossItems)}] " +
+                    $"TP: [{string.Join(", ", modifyOrderRequestParameters.TakeProfitItems)}]"
+                );
+                return false;
             }
-            else if (!MathUtil.Equals(orderRequestParameters.Quantity, finalQuantity))
+
+            if (!MathUtil.Equals(orderRequestParameters.Quantity, finalQuantity))
             {
                 context.Logger.LogInfo(
                     $"Changed request {orderRequestParameters.RequestId} quantity from {orderRequestParameters.Quantity} to {finalQuantity}."
                 );
                 orderRequestParameters.Quantity = finalQuantity;
             }
+            return false;
         }
         public void ReportCompletedRequest(RequestParameters requestParameters, object requestResult)
         {

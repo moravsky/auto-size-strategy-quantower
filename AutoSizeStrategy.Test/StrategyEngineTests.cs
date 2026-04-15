@@ -118,12 +118,6 @@ namespace AutoSizeStrategy.Test
                     // STATIC SCENARIO (Personal/Sim)
                     // No Thresholds provided. Uses raw Balance.
                     { "SimPersonal", 150_000, new Dictionary<string, string>(), 142 },
-                    // EDGE CASE: TIGHT TRAILING STOP
-                    // Demonstrates what happens when the trailing stop is very close to balance.
-                    { "TPPRO149900", 150_000, new Dictionary<string, string>
-                    {
-                        { "AutoLiquidateThresholdCurrentValue", "149900" },
-                    }, 0 }
                 };
 
                 return data;
@@ -150,9 +144,30 @@ namespace AutoSizeStrategy.Test
             // Stop: 5 pts = 20 ticks. Value: 20 ticks * $5 = $100 risk per contract.
             var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
 
-            _engine.ProcessRequest(request);
+            bool handled = _engine.ProcessRequest(request);
 
+            Assert.False(handled);
             Assert.Equal(expectedQty, request.Quantity);
+        }
+
+        [Fact]
+        public void ProcessRequest_InfersMode_TightTrailingStop_Cancels()
+        {
+            // EDGE CASE: TIGHT TRAILING STOP
+            // Trailing stop very close to balance leaves no risk budget.
+            _accountMock.SetupGet(a => a.Id).Returns("TPPRO149900");
+            _accountMock.SetupGet(a => a.Balance).Returns(150_000.0);
+            _accountMock.SetupGet(a => a.AdditionalInfo).Returns(new Dictionary<string, string>
+            {
+                { "AutoLiquidateThresholdCurrentValue", "149900" },
+            });
+            _settingsMock.SetupGet(s => s.DrawdownMode).Returns(_accountMock.Object.InferDrawdownMode());
+
+            var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
+
+            bool handled = _engine.ProcessRequest(request);
+
+            Assert.True(handled);
         }
 
         [Fact]
@@ -232,7 +247,6 @@ namespace AutoSizeStrategy.Test
             // ADDING (NetPos > 0)
             { 3.0, Side.Buy, 1.0, 20.0, 139.0 }, // Magic "Buy 1" Top-up -> Upsized to remaining
             { 3.0, Side.Buy, 1000.0, 20.0, 139.0 }, // Oversized Top-up -> Capped at remaining
-            { 150.0, Side.Buy, 10.0, 20.0, 0.0 }, // Already maxed -> Cancels to 0
 
             // REVERSALS (NetPos opposite of order)
             { 10.0, Side.Sell, 11.0, 20.0, 152.0 }, // Reversal Trigger (>10) -> Upsized to max short (10 + 150)
@@ -262,9 +276,26 @@ namespace AutoSizeStrategy.Test
             if (stopLossTicks <= 0)
                 request.StopLossItems.Clear();
 
-            _engine.ProcessRequest(request);
+            bool handled = _engine.ProcessRequest(request);
 
+            Assert.False(handled);
             Assert.Equal(expectedQty, request.Quantity);
+        }
+
+        [Fact]
+        public void ProcessRequest_PositionSizing_AlreadyMaxed_Cancels()
+        {
+            // Already at max long position - adding more should cancel
+            _serviceMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(150.0);
+
+            var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
+            request.Inner.Side = Side.Buy;
+
+            bool handled = _engine.ProcessRequest(request);
+
+            Assert.True(handled);
         }
 
         [Fact]
@@ -274,9 +305,9 @@ namespace AutoSizeStrategy.Test
             // Risk $10. Stop 3pts ($15/contract). Size = 10/15 = 0.
             var request = CreateValidRequest(quantity: 1, stopDistanceTicks: 15);
 
-            _engine.ProcessRequest(request);
+            bool handled = _engine.ProcessRequest(request);
 
-            Assert.Equal(0, request.Quantity); // cancels the request
+            Assert.True(handled);
 
             // Verify Log
             _loggerMock.Verify(
@@ -295,9 +326,9 @@ namespace AutoSizeStrategy.Test
             var request = CreateValidRequest(quantity: 10, stopDistanceTicks: 20);
             request.StopLossItems.Clear();
 
-            _engine.ProcessRequest(request);
+            bool handled = _engine.ProcessRequest(request);
 
-            Assert.Equal(0, request.Quantity);
+            Assert.True(handled);
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(s => s.Contains("cancelled: stop loss required"))),
                 Times.Once
@@ -340,9 +371,9 @@ namespace AutoSizeStrategy.Test
             // Result: 0.1 contracts -> 0.
             var request = CreateValidRequest(quantity: 1, stopDistanceTicks: 2000);
 
-            _engine.ProcessRequest(request);
+            bool handled = _engine.ProcessRequest(request);
 
-            Assert.Equal(0, request.Quantity);
+            Assert.True(handled);
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(s => s.Contains("Insufficient risk budget"))),
                 Times.Once
@@ -433,7 +464,8 @@ namespace AutoSizeStrategy.Test
             // Capture the wrapper, don't execute the real method
             engineMock
                 .Setup(e => e.ProcessRequest(It.IsAny<IRequestParameters>()))
-                .Callback<IRequestParameters>(p => capturedWrapper = p);
+                .Callback<IRequestParameters>(p => capturedWrapper = p)
+                .Returns(false);
 
             var sdkParams = new PlaceOrderRequestParameters
             {
@@ -465,7 +497,8 @@ namespace AutoSizeStrategy.Test
             // Capture the wrapper, don't execute the real method
             engineMock
                 .Setup(e => e.ProcessRequest(It.IsAny<IRequestParameters>()))
-                .Callback<IRequestParameters>(p => capturedWrapper = p);
+                .Callback<IRequestParameters>(p => capturedWrapper = p)
+                .Returns(false);
 
             var sdkParams = new ModifyOrderRequestParameters
             {
@@ -503,12 +536,10 @@ namespace AutoSizeStrategy.Test
                 .Setup(s => s.CancelReplace(It.IsAny<string>(), It.IsAny<IPlaceOrderRequestParameters>()))
                 .Callback<string, IPlaceOrderRequestParameters>((_, p) => capturedReplacement = p);
 
-            _engine.ProcessRequest(request);
+            bool handled = _engine.ProcessRequest(request);
 
-            // Original modify is suppressed: cancellation token set and quantity zeroed
-            // (Quantower does not reliably respect CancellationToken alone)
-            Assert.True(request.CancellationToken.IsCancellationRequested);
-            Assert.Equal(0, request.Quantity);
+            // Original modify is suppressed via the Handled flag on the event args
+            Assert.True(handled);
 
             // CancelReplace fired on the correct order
             _serviceMock.Verify(
@@ -625,9 +656,9 @@ namespace AutoSizeStrategy.Test
             requestMock.SetupGet(r => r.StopLossItems).Returns(slList);
             requestMock.SetupProperty(r => r.Quantity, 10.0);
 
-            _engine.ProcessRequest(requestMock.Object);
+            bool handled = _engine.ProcessRequest(requestMock.Object);
 
-            Assert.Equal(0, requestMock.Object.Quantity);
+            Assert.True(handled);
             _serviceMock.Verify(
                 s => s.Cancel(It.Is<string>(id => id == "order-to-cancel")),
                 Times.Once
@@ -656,13 +687,13 @@ namespace AutoSizeStrategy.Test
             _symbolMock.Setup(s => s.GetTickCost(It.IsAny<double>())).Returns(tickCost);
             var request = CreateValidRequest(quantity: 5, stopDistanceTicks: 20);
 
-            _engine.ProcessRequest(request);
+            bool handled = _engine.ProcessRequest(request);
 
             _loggerMock.Verify(
                 l => l.LogError(It.Is<string>(s => s.Contains("tick value unavailable"))),
                 Times.Once
             );
-            Assert.Equal(0, request.Quantity);
+            Assert.True(handled);
         }
 
         [Theory]
@@ -682,9 +713,6 @@ namespace AutoSizeStrategy.Test
 
         // Adding off capped size: cap=10, position=7 -> remaining=3
         [InlineData(10, "MNQ", 7, 3, true)]
-
-        // Position already at cap: cap=10, position=10 -> cancel (qty=0)
-        [InlineData(10, "MNQ", 10, 0, true)]
         public void ProcessRequest_MaxContractsCap_Scenarios(
             int sizeCap,
             string symbolName,
@@ -704,12 +732,36 @@ namespace AutoSizeStrategy.Test
 
             var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
 
-            _engine.ProcessRequest(request);
+            bool handled = _engine.ProcessRequest(request);
 
+            Assert.False(handled);
             Assert.Equal(expectedQty, request.Quantity);
             _loggerMock.Verify(
                 l => l.LogInfo(It.Is<string>(s => s.Contains("Capping calculatedSize"))),
                 expectCapLog ? Times.Once() : Times.Never()
+            );
+        }
+
+        [Fact]
+        public void ProcessRequest_MaxContractsCap_AlreadyAtCap_Cancels()
+        {
+            // Cap=10, already long 10 -> remaining capacity 0 -> cancel
+            _settingsMock.SetupGet(s => s.MaxContractsMicro).Returns(10);
+            _settingsMock.SetupGet(s => s.MaxContractsMini).Returns(0);
+            _symbolMock.SetupGet(s => s.Name).Returns("MNQ");
+
+            _serviceMock
+                .Setup(c => c.GetNetPositionQuantity(It.IsAny<IAccount>(), It.IsAny<ISymbol>()))
+                .Returns(10.0);
+
+            var request = CreateValidRequest(quantity: 1000, stopDistanceTicks: 20);
+
+            bool handled = _engine.ProcessRequest(request);
+
+            Assert.True(handled);
+            _loggerMock.Verify(
+                l => l.LogInfo(It.Is<string>(s => s.Contains("Capping calculatedSize"))),
+                Times.Once
             );
         }
 

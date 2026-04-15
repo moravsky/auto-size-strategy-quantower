@@ -193,7 +193,7 @@ namespace AutoSizeStrategy
         {
             try
             {
-                _strategyEngine.ProcessRequest(e.RequestParameters);
+                e.Handled = _strategyEngine.ProcessRequest(e.RequestParameters);
                 UpdateMetrics();
             }
             catch (Exception ex)
